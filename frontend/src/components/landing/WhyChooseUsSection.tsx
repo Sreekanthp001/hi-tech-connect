@@ -10,8 +10,8 @@ const reasons = [
 ];
 
 const WhyChooseUsSection = () => (
-  <section className="bg-secondary py-20">
-    <div className="container">
+  <section className="bg-gray-50 py-32">
+    <div className="max-w-7xl mx-auto px-6 lg:px-8">
       <div className="mx-auto max-w-3xl text-center">
         <h2 className="text-3xl font-bold md:text-4xl">Why Choose Hi-Tech?</h2>
         <p className="mt-3 text-muted-foreground">

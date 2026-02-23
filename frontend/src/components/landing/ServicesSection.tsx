@@ -8,8 +8,8 @@ const services = [
 ];
 
 const ServicesSection = () => (
-  <section id="services" className="py-20">
-    <div className="container">
+  <section id="services" className="py-32 bg-white">
+    <div className="max-w-7xl mx-auto px-6 lg:px-8">
       <h2 className="text-center text-3xl font-bold md:text-4xl">Our Services</h2>
       <p className="mx-auto mt-3 max-w-xl text-center text-muted-foreground">
         End-to-end service from consultation to long-term maintenance.

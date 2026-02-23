@@ -1,40 +1,97 @@
+import { Link } from "react-router-dom";
 import { Shield, Phone, Mail, MapPin } from "lucide-react";
 
-const Footer = () => (
-  <footer className="border-t bg-primary py-12 text-primary-foreground">
-    <div className="container">
-      <div className="grid gap-8 md:grid-cols-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Shield className="h-6 w-6" />
-            <span className="text-lg font-bold">Hi-Tech Communication Systems</span>
+const Footer = () => {
+  return (
+    <footer className="bg-primary text-white pt-20 pb-10 border-t border-white/5">
+      <div className="max-w-7xl mx-auto px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
+          {/* Company Info */}
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-accent">
+                <Shield className="h-6 w-6 text-white" />
+              </div>
+              <span className="text-xl font-bold tracking-tight">Hi Tech Communication Systems</span>
+            </div>
+            <p className="text-gray-400 leading-relaxed text-sm">
+              Established in 1997, Hi Tech Communication Systems has been leading the security infrastructure
+              market in Nellore for 28 years. Verified dealer for HIKVISION & CP PLUS.
+            </p>
           </div>
-          <p className="mt-3 text-sm text-primary-foreground/70">
-            28 years of trusted security solutions in Nellore, Andhra Pradesh.
+
+          {/* Contact Details */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-bold">Contact Office</h3>
+            <ul className="space-y-4">
+              <li className="flex items-start gap-3 text-gray-400 hover:text-white transition-colors">
+                <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
+                <span className="text-sm">Nellore Bazar, Nellore, Andhra Pradesh - 524001</span>
+              </li>
+              <li className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
+                <Phone className="h-5 w-5 text-accent shrink-0" />
+                <span className="text-sm">07383872542</span>
+              </li>
+              <li className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
+                <Mail className="h-5 w-5 text-accent shrink-0" />
+                <span className="text-sm">support@hitechsystem.in</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Quick Links */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-bold">Quick Links</h3>
+            <ul className="space-y-3">
+              {[
+                { label: "Home", path: "/" },
+                { label: "About", path: "/" },
+                { label: "Our Works", path: "/our-works" },
+                { label: "Reviews", path: "/reviews" },
+                { label: "Contact", path: "/" },
+              ].map((link) => (
+                <li key={link.label}>
+                  <Link to={link.path} className="text-sm text-gray-400 hover:text-accent transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Authorization */}
+          <div className="space-y-6">
+            <h3 className="text-lg font-bold">Authorized Partner</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/5 p-3 rounded flex items-center justify-center border border-white/10 group hover:border-accent transition-colors">
+                <span className="text-xs font-bold text-gray-300">HIKVISION</span>
+              </div>
+              <div className="bg-white/5 p-3 rounded flex items-center justify-center border border-white/10">
+                <span className="text-xs font-bold text-gray-300">CP PLUS</span>
+              </div>
+              <div className="bg-white/5 p-3 rounded flex items-center justify-center border border-white/10">
+                <span className="text-xs font-bold text-gray-300">DAHUA</span>
+              </div>
+              <div className="bg-white/5 p-3 rounded flex items-center justify-center border border-white/10">
+                <span className="text-xs font-bold text-gray-300">ZKTECO</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Copyright */}
+        <div className="pt-10 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <p className="text-sm text-gray-500">
+            © {new Date().getFullYear()} Hi-Tech Communication Systems. All rights reserved.
           </p>
-        </div>
-        <div>
-          <h4 className="mb-3 font-semibold">Contact Us</h4>
-          <div className="space-y-2 text-sm text-primary-foreground/70">
-            <div className="flex items-center gap-2"><Phone className="h-4 w-4" /> +91 9876 543 210</div>
-            <div className="flex items-center gap-2"><Mail className="h-4 w-4" /> info@hitechcomm.in</div>
-            <div className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Nellore, Andhra Pradesh</div>
-          </div>
-        </div>
-        <div>
-          <h4 className="mb-3 font-semibold">Quick Links</h4>
-          <div className="space-y-2 text-sm text-primary-foreground/70">
-            <a href="#products" className="block hover:text-primary-foreground">Products</a>
-            <a href="#services" className="block hover:text-primary-foreground">Services</a>
-            <a href="#reviews" className="block hover:text-primary-foreground">Reviews</a>
+          <div className="flex gap-8">
+            <a href="#" className="text-xs text-gray-500 hover:text-white transition-colors">Privacy Policy</a>
+            <a href="#" className="text-xs text-gray-500 hover:text-white transition-colors">Terms of Service</a>
           </div>
         </div>
       </div>
-      <div className="mt-8 border-t border-primary-foreground/20 pt-6 text-center text-xs text-primary-foreground/50">
-        © {new Date().getFullYear()} Hi-Tech Communication Systems. All rights reserved.
-      </div>
-    </div>
-  </footer>
-);
+    </footer>
+  );
+};
 
 export default Footer;

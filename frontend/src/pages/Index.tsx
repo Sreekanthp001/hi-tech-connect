@@ -4,7 +4,7 @@ import AboutSection from "@/components/landing/AboutSection";
 import ProductsSection from "@/components/landing/ProductsSection";
 import ServicesSection from "@/components/landing/ServicesSection";
 import WhyChooseUsSection from "@/components/landing/WhyChooseUsSection";
-import ReviewsSection from "@/components/landing/ReviewsSection";
+import TicketForm from "@/components/landing/TicketForm";
 import Footer from "@/components/landing/Footer";
 
 const Index = () => (
@@ -16,7 +16,7 @@ const Index = () => (
       <ProductsSection />
       <ServicesSection />
       <WhyChooseUsSection />
-      <ReviewsSection />
+      <TicketForm />
     </main>
     <Footer />
   </div>

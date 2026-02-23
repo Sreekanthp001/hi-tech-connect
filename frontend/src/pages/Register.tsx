@@ -4,24 +4,59 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield } from "lucide-react";
+import { Shield, CheckCircle2 } from "lucide-react";
+import api from "@/lib/api";
+import { toast } from "sonner";
 
 const Register = () => {
   const navigate = useNavigate();
-  const [role, setRole] = useState<"admin" | "worker" | "client">("client");
+  const [form, setForm] = useState({ name: "", email: "", phone: "" });
+  const [isLoading, setIsLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (role === "admin") navigate("/admin");
-    else if (role === "worker") navigate("/worker");
-    else navigate("/client");
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const roles = [
-    { value: "client" as const, label: "Client" },
-    { value: "worker" as const, label: "Worker" },
-    { value: "admin" as const, label: "Admin" },
-  ];
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      // Submit as a new connection ticket since there's no register endpoint
+      await api.post("/tickets", {
+        title: "New Connection Request",
+        description: `New customer registration from ${form.name}`,
+        type: "INSTALLATION",
+        address: "To be confirmed",
+        clientName: form.name,
+        clientPhone: form.phone,
+        clientEmail: form.email,
+      });
+      toast.success("Registration request sent! We'll contact you shortly.");
+      setSubmitted(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Submission failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-secondary p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <CheckCircle2 className="h-16 w-16 text-success animate-bounce" />
+            <h2 className="text-2xl font-bold text-success">Request Received!</h2>
+            <p className="text-muted-foreground italic">
+              We'll reach out to <strong>{form.phone}</strong> to confirm your connection.
+            </p>
+            <Button onClick={() => navigate("/login")}>Back to Login</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary p-4">
@@ -31,49 +66,26 @@ const Register = () => {
             <Shield className="h-8 w-8 text-primary" />
             <span className="text-xl font-bold text-primary">Hi-Tech</span>
           </Link>
-          <CardTitle className="text-2xl">Create Account</CardTitle>
-          <CardDescription>Register to get started</CardDescription>
+          <CardTitle className="text-2xl">Request Connection</CardTitle>
+          <CardDescription>Submit your details and we'll get you set up.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Register as</Label>
-              <div className="grid grid-cols-3 gap-2">
-                {roles.map((r) => (
-                  <button
-                    type="button"
-                    key={r.value}
-                    onClick={() => setRole(r.value)}
-                    className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                      role === r.value
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-background text-muted-foreground hover:bg-accent"
-                    }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input id="name" placeholder="John Doe" required />
+              <Label htmlFor="name">Full Name *</Label>
+              <Input id="name" name="name" placeholder="John Doe" value={form.name} onChange={handleChange} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@example.com" required />
+              <Input id="email" name="email" type="email" placeholder="you@example.com" value={form.email} onChange={handleChange} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" type="tel" placeholder="+91 98765 43210" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="••••••••" required />
+              <Label htmlFor="phone">Phone Number *</Label>
+              <Input id="phone" name="phone" type="tel" placeholder="+91 98765 43210" value={form.phone} onChange={handleChange} required />
             </div>
           </CardContent>
           <CardFooter className="flex-col gap-3">
-            <Button type="submit" className="w-full">Create Account</Button>
+            <Button type="submit" className="w-full" loading={isLoading}>Submit Request</Button>
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
               <Link to="/login" className="font-medium text-primary hover:underline">Sign In</Link>

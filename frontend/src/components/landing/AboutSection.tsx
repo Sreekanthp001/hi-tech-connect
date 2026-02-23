@@ -1,15 +1,15 @@
 import { Building2, Users, ShieldCheck, Clock } from "lucide-react";
 
 const stats = [
-  { icon: Clock, value: "28+", label: "Years of Service" },
-  { icon: Users, value: "5,000+", label: "Satisfied Clients" },
-  { icon: Building2, value: "200+", label: "Corporate Clients" },
-  { icon: ShieldCheck, value: "10,000+", label: "Installations" },
+  { icon: Clock, value: "28+", label: "Years Experience" },
+  { icon: ShieldCheck, value: "1000+", label: "Installations" },
+  { icon: Users, value: "24/7", label: "Professional Support" },
+  { icon: Building2, value: "100%", label: "Customer Satisfaction" },
 ];
 
 const AboutSection = () => (
-  <section id="about" className="py-20">
-    <div className="container">
+  <section id="about" className="py-32 bg-white">
+    <div className="max-w-7xl mx-auto px-6 lg:px-8">
       <div className="mx-auto max-w-3xl text-center">
         <h2 className="text-3xl font-bold text-foreground md:text-4xl">About Hi-Tech Communication Systems</h2>
         <p className="mt-4 text-lg text-muted-foreground">
