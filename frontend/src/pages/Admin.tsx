@@ -10,7 +10,8 @@ import {
 } from "recharts";
 import {
     Users, Ticket, CheckCircle2, AlertCircle, ArrowUpRight,
-    RefreshCw, TrendingUp, UserPlus, Key, Trash2, MapPin, Plus, X, Copy
+    RefreshCw, TrendingUp, UserPlus, Key, Trash2, MapPin, Plus, X, Copy,
+    Search, CreditCard, History, ArrowLeft, Building, Clock, Phone
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -32,6 +33,10 @@ interface TicketRecord {
     longitude?: number;
     worker?: { id: string; name: string } | null;
     pendingNote?: string;
+    paymentStatus?: "FULL" | "PARTIAL" | "PENDING";
+    totalAmount?: number;
+    amountReceived?: number;
+    paymentNote?: string;
     createdAt: string;
 }
 
@@ -96,6 +101,20 @@ const StatusBadge = ({ status }: { status: string }) => {
     );
 };
 
+const PaymentStatusBadge = ({ status }: { status?: string }) => {
+    if (!status) return null;
+    const styles: Record<string, string> = {
+        "FULL": "bg-green-100 text-green-700 border-green-200",
+        "PARTIAL": "bg-amber-100 text-amber-700 border-amber-200",
+        "PENDING": "bg-slate-100 text-slate-700 border-slate-200",
+    };
+    return (
+        <Badge variant="outline" className={`font-black uppercase text-[10px] ${styles[status]}`}>
+            {status}
+        </Badge>
+    );
+};
+
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
 const AdminDashboard = () => {
@@ -117,14 +136,9 @@ const AdminDashboard = () => {
     const [perf, setPerf] = useState<WorkerPerf[]>([]);
     const [perfLoading, setPerfLoading] = useState(true);
 
-    // Portfolio state
-    const [photos, setPhotos] = useState<WorkPhoto[]>([]);
-    const [photosLoading, setPhotosLoading] = useState(false);
-    const [newPhoto, setNewPhoto] = useState({ title: "", imageUrl: "" });
-    const [creatingPhoto, setCreatingPhoto] = useState(false);
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<"tickets" | "performance" | "workers" | "portfolio">("tickets");
+    const [activeTab, setActiveTab] = useState<"tickets" | "performance" | "workers" | "customers">("tickets");
 
     // Manual Ticket Modal
     const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
@@ -140,6 +154,23 @@ const AdminDashboard = () => {
         clientEmail: "",
     });
     const [isCreatingTicket, setIsCreatingTicket] = useState(false);
+
+    // Customers Section State
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [customersLoading, setCustomersLoading] = useState(false);
+    const [customerSearch, setCustomerSearch] = useState("");
+    const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+    const [customerProfileLoading, setCustomerProfileLoading] = useState(false);
+
+    // Payment Dialog State
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [paymentData, setPaymentData] = useState({
+        ticketId: "",
+        customerId: "",
+        amount: "",
+        paymentMode: "Cash",
+        workSummary: ""
+    });
 
     // ── Data fetchers ──────────────────────────────────────────────────────
 
@@ -167,15 +198,15 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleAdminComplete = async (ticketId: string) => {
-        if (!window.confirm("Are you sure you want to mark this ticket as COMPLETED? This will notify the client.")) return;
-        try {
-            await api.patch(`/admin/tickets/${ticketId}/status`, { status: "COMPLETED" });
-            toast.success("Ticket marked as completed!");
-            fetchTickets(); // Refresh list
-        } catch {
-            toast.error("Failed to update ticket status");
-        }
+    const handleAdminComplete = async (ticketRecord: TicketRecord) => {
+        setPaymentData({
+            ticketId: ticketRecord.id,
+            customerId: (ticketRecord as any).customerId || "",
+            amount: "",
+            paymentMode: "Cash",
+            workSummary: ""
+        });
+        setIsPaymentModalOpen(true);
     };
 
     const fetchPerf = async () => {
@@ -190,15 +221,59 @@ const AdminDashboard = () => {
         }
     };
 
-    const fetchPhotos = async () => {
-        setPhotosLoading(true);
+
+    const fetchCustomers = async (search = "") => {
+        setCustomersLoading(true);
         try {
-            const res = await api.get("/portfolio");
-            setPhotos(res.data);
+            const res = await api.get(`/admin/customers${search ? `?search=${search}` : ""}`);
+            setCustomers(res.data);
         } catch {
-            toast.error("Failed to load portfolio");
+            toast.error("Failed to load customers");
         } finally {
-            setPhotosLoading(false);
+            setCustomersLoading(false);
+        }
+    };
+
+    const fetchCustomerProfile = async (id: string) => {
+        setCustomerProfileLoading(true);
+        try {
+            const res = await api.get(`/admin/customer/${id}`);
+            setSelectedCustomer(res.data);
+            setActiveTab("customers");
+        } catch {
+            toast.error("Failed to load customer profile");
+        } finally {
+            setCustomerProfileLoading(false);
+        }
+    };
+
+    const handleAddPayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            if (paymentData.ticketId) {
+                // Update ticket and record payment
+                await api.patch(`/admin/tickets/${paymentData.ticketId}/status`, {
+                    status: "COMPLETED",
+                    amount: paymentData.amount,
+                    paymentMode: paymentData.paymentMode,
+                    workSummary: paymentData.workSummary
+                });
+                toast.success("Ticket completed and payment recorded!");
+                setIsPaymentModalOpen(false);
+                fetchTickets();
+            } else {
+                // Manual payment
+                await api.post("/admin/payments", {
+                    customerId: paymentData.customerId,
+                    amount: paymentData.amount,
+                    paymentMode: paymentData.paymentMode
+                });
+                toast.success("Payment recorded successfully!");
+                setIsPaymentModalOpen(false);
+                if (selectedCustomer) fetchCustomerProfile(selectedCustomer.id);
+            }
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to record payment");
         }
     };
 
@@ -206,7 +281,7 @@ const AdminDashboard = () => {
         fetchTickets();
         fetchWorkers();
         fetchPerf();
-        fetchPhotos();
+        fetchCustomers();
     }, []);
 
     // ── Handlers ───────────────────────────────────────────────────────────
@@ -270,31 +345,6 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleCreatePhoto = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setCreatingPhoto(true);
-        try {
-            await api.post("/portfolio", newPhoto);
-            toast.success("Work photo added!");
-            setNewPhoto({ title: "", imageUrl: "" });
-            fetchPhotos();
-        } catch {
-            toast.error("Failed to add photo");
-        } finally {
-            setCreatingPhoto(false);
-        }
-    };
-
-    const handleDeletePhoto = async (id: string) => {
-        if (!window.confirm("Delete this photo?")) return;
-        try {
-            await api.delete(`/portfolio/${id}`);
-            toast.success("Photo deleted.");
-            fetchPhotos();
-        } catch {
-            toast.error("Failed to delete photo");
-        }
-    };
 
     const handleCreateManualTicket = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -356,12 +406,12 @@ const AdminDashboard = () => {
                     </div>
                     <div className="flex gap-2 items-center">
                         <NotificationBell />
-                        <Button variant="default" size="sm" onClick={() => setIsTicketModalOpen(true)} className="gap-2 bg-accent hover:bg-accent/90 pulse-button">
+                        <Button variant="default" size="sm" onClick={() => setIsTicketModalOpen(true)} className="gap-2 bg-accent hover:bg-accent/90">
                             <Plus className="h-4 w-4" />
                             New Manual Request
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => { fetchTickets(); fetchPerf(); fetchWorkers(); fetchPhotos(); }} className="gap-2">
-                            <RefreshCw className={`h-4 w-4 ${ticketsLoading || perfLoading || workersLoading || photosLoading ? "animate-spin" : ""}`} />
+                        <Button variant="outline" size="sm" onClick={() => { fetchTickets(); fetchPerf(); fetchWorkers(); }} className="gap-2">
+                            <RefreshCw className={`h-4 w-4 ${ticketsLoading || perfLoading || workersLoading ? "animate-spin" : ""}`} />
                             Refresh
                         </Button>
                         <Button variant="outline" size="sm" onClick={logout} className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10">
@@ -395,21 +445,26 @@ const AdminDashboard = () => {
                     ))}
                 </div>
 
-                {/* Tab Nav */}
                 <div className="mb-6 flex gap-1 rounded-xl border bg-card p-1 w-fit">
-                    {(["tickets", "performance", "workers", "portfolio"] as const).map((tab) => (
+                    {(["tickets", "customers", "performance", "workers"] as const).map((tab) => (
                         <button
                             key={tab}
-                            onClick={() => setActiveTab(tab)}
+                            onClick={() => {
+                                setActiveTab(tab);
+                                if (tab === "customers") fetchCustomers();
+                                if (tab === "tickets") fetchTickets();
+                                if (tab === "workers") fetchWorkers();
+                                if (tab === "performance") fetchPerf();
+                            }}
                             className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition-all duration-200 ${activeTab === tab
                                 ? "bg-primary text-primary-foreground shadow"
                                 : "text-muted-foreground hover:text-foreground"
                                 }`}
                         >
-                            {tab === "performance" && <TrendingUp className="h-4 w-4" />}
                             {tab === "tickets" && <Ticket className="h-4 w-4" />}
+                            {tab === "customers" && <Users className="h-4 w-4" />}
+                            {tab === "performance" && <TrendingUp className="h-4 w-4" />}
                             {tab === "workers" && <Users className="h-4 w-4" />}
-                            {tab === "portfolio" && <MapPin className="h-4 w-4" />}
                             {tab}
                         </button>
                     ))}
@@ -438,7 +493,7 @@ const AdminDashboard = () => {
                                         <table className="w-full text-left text-sm">
                                             <thead className="border-b text-muted-foreground">
                                                 <tr>
-                                                    {["Client", "Type", "Status", "Address", "Assigned To", "Assign"].map((h) => (
+                                                    {["Client", "Type", "Status", "Address", "Assigned To", "Payment", "Financials", "Assign"].map((h) => (
                                                         <th key={h} className="pb-3 pr-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
                                                     ))}
                                                 </tr>
@@ -492,6 +547,15 @@ const AdminDashboard = () => {
                                                                 : <span className="text-muted-foreground italic text-xs">Unassigned</span>
                                                             }
                                                         </td>
+                                                        <td className="py-3 pr-4">
+                                                            <PaymentStatusBadge status={t.paymentStatus} />
+                                                        </td>
+                                                        <td className="py-3 pr-4">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] font-bold">Rec: ₹{t.amountReceived || 0}</span>
+                                                                <span className="text-[10px] text-muted-foreground">Tot: ₹{t.totalAmount || 0}</span>
+                                                            </div>
+                                                        </td>
                                                         <td className="py-3">
                                                             <div className="flex gap-2 items-center">
                                                                 {t.status === "COMPLETED" && (
@@ -534,7 +598,7 @@ const AdminDashboard = () => {
                                                                             size="sm"
                                                                             variant="ghost"
                                                                             className="text-green-600 hover:bg-green-50 px-2"
-                                                                            onClick={() => handleAdminComplete(t.id)}
+                                                                            onClick={() => handleAdminComplete(t)}
                                                                         >
                                                                             <CheckCircle2 className="h-4 w-4" />
                                                                         </Button>
@@ -801,84 +865,252 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
-                {/* ── PORTFOLIO TAB ─────────────────────────────────────────────────── */}
-                {activeTab === "portfolio" && (
-                    <div className="grid gap-8 lg:grid-cols-3 stagger-fade-in">
-                        {/* New Photo Form */}
-                        <Card className="premium-card h-fit">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-xl italic">
-                                    <Plus className="h-5 w-5 text-accent" /> Add Portfolio Work
-                                </CardTitle>
-                                <CardDescription>Showcase your completed projects.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={handleCreatePhoto} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="title">Project Title</Label>
-                                        <Input
-                                            id="title"
-                                            placeholder="CCTV Installation at XYZ"
-                                            value={newPhoto.title}
-                                            onChange={(e) => setNewPhoto(p => ({ ...p, title: e.target.value }))}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="url">Image URL</Label>
-                                        <Input
-                                            id="url"
-                                            placeholder="https://example.com/image.jpg"
-                                            value={newPhoto.imageUrl}
-                                            onChange={(e) => setNewPhoto(p => ({ ...p, imageUrl: e.target.value }))}
-                                            required
-                                        />
-                                    </div>
-                                    <Button type="submit" className="w-full mt-2" loading={creatingPhoto}>
-                                        Save Project Photo
-                                    </Button>
-                                </form>
-                            </CardContent>
-                        </Card>
 
-                        {/* Photo List */}
-                        <Card className="lg:col-span-2 premium-card">
-                            <CardHeader>
-                                <CardTitle className="text-xl italic">Gallery Management</CardTitle>
-                                <CardDescription>Existing portfolio items shown on public site.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                {photosLoading ? (
-                                    <div className="flex h-40 items-center justify-center italic text-muted-foreground">Loading portfolio…</div>
-                                ) : photos.length === 0 ? (
-                                    <div className="flex h-40 items-center justify-center italic text-muted-foreground">No portfolio items yet.</div>
-                                ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {photos.map((p) => (
-                                            <div key={p.id} className="group relative overflow-hidden rounded-xl border bg-card p-2 shadow-sm transition-all hover:shadow-md">
-                                                <div className="aspect-video w-full overflow-hidden rounded-lg bg-secondary/20">
-                                                    <img src={p.imageUrl} alt={p.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                {/* ── CUSTOMERS TAB ────────────────────────────────────────────────── */}
+                {activeTab === "customers" && (
+                    <div className="grid gap-8 stagger-fade-in">
+                        {!selectedCustomer ? (
+                            <Card className="premium-card">
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                                    <div>
+                                        <CardTitle className="text-xl">Customer Directory</CardTitle>
+                                        <CardDescription>Manage your client base and view their history.</CardDescription>
+                                    </div>
+                                    <div className="relative w-64">
+                                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            placeholder="Search phone or name..."
+                                            className="pl-9"
+                                            value={customerSearch}
+                                            onChange={(e) => {
+                                                setCustomerSearch(e.target.value);
+                                                fetchCustomers(e.target.value);
+                                            }}
+                                        />
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    {customersLoading ? (
+                                        <div className="flex h-40 items-center justify-center italic text-muted-foreground">Loading customers...</div>
+                                    ) : customers.length === 0 ? (
+                                        <div className="flex h-40 items-center justify-center italic text-muted-foreground">No customers found.</div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="border-b text-muted-foreground">
+                                                    <tr>
+                                                        {["Customer", "Phone", "Address", "Visits", "Actions"].map((h) => (
+                                                            <th key={h} className="pb-3 pr-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {customers.map((c) => (
+                                                        <tr key={c.id} className="transition-colors hover:bg-secondary/30 group">
+                                                            <td className="py-4 pr-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center font-bold text-accent text-xs uppercase">
+                                                                        {c.name[0]}
+                                                                    </div>
+                                                                    <span className="font-bold">{c.name}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-4 pr-4 font-medium">{c.phone}</td>
+                                                            <td className="py-4 pr-4 text-xs text-muted-foreground line-clamp-1 max-w-[200px]" title={c.address}>{c.address}</td>
+                                                            <td className="py-4 pr-4">
+                                                                <Badge variant="secondary" className="font-bold">{c._count?.tickets || 0}</Badge>
+                                                            </td>
+                                                            <td className="py-4">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="gap-2"
+                                                                    onClick={() => fetchCustomerProfile(c.id)}
+                                                                >
+                                                                    View Profile
+                                                                    <ArrowUpRight className="h-3 w-3" />
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Customer Profile Header */}
+                                <div className="flex items-center gap-4">
+                                    <Button variant="ghost" size="sm" onClick={() => setSelectedCustomer(null)}>
+                                        <ArrowLeft className="h-4 w-4 mr-2" />
+                                        Back to Directory
+                                    </Button>
+                                </div>
+
+                                <div className="grid gap-6 md:grid-cols-3">
+                                    {/* Stats Cards */}
+                                    <Card className="md:col-span-1 premium-card">
+                                        <CardHeader>
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center text-white font-black text-xl">
+                                                    {selectedCustomer.name[0].toUpperCase()}
                                                 </div>
-                                                <div className="mt-3 flex items-center justify-between px-1">
-                                                    <span className="text-xs font-bold truncate pr-2">{p.title}</span>
-                                                    <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0"
-                                                        onClick={() => handleDeletePhoto(p.id)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                <div>
+                                                    <CardTitle>{selectedCustomer.name}</CardTitle>
+                                                    <CardDescription>{selectedCustomer.phone}</CardDescription>
                                                 </div>
                                             </div>
-                                        ))}
+                                        </CardHeader>
+                                        <CardContent className="space-y-4 pt-4 border-t">
+                                            <div className="flex items-start gap-2">
+                                                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                                                <div className="text-sm">
+                                                    <p className="font-semibold">Address</p>
+                                                    <p className="text-muted-foreground">{selectedCustomer.address}</p>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase text-muted-foreground">Total Visits</p>
+                                                    <p className="text-2xl font-bold">{selectedCustomer.stats.totalVisits}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase text-muted-foreground">Total Paid</p>
+                                                    <p className="text-2xl font-bold text-success">₹{selectedCustomer.stats.totalPayments}</p>
+                                                </div>
+                                            </div>
+                                            <div className="pt-4 border-t">
+                                                <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Last Visit</p>
+                                                <p className="text-sm font-medium">
+                                                    {selectedCustomer.stats.lastVisit ? new Date(selectedCustomer.stats.lastVisit).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No visits yet'}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                className="w-full gap-2 mt-4 text-xs h-10 px-3 py-2"
+                                                onClick={() => {
+                                                    setPaymentData({
+                                                        ticketId: "",
+                                                        customerId: selectedCustomer.id,
+                                                        amount: "",
+                                                        paymentMode: "Cash",
+                                                        workSummary: ""
+                                                    });
+                                                    setIsPaymentModalOpen(true);
+                                                }}
+                                            >
+                                                <CreditCard className="h-4 w-4" />
+                                                Add Manual Payment
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* History Tabs/Timeline */}
+                                    <div className="md:col-span-2 space-y-6">
+                                        <Card className="premium-card">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <History className="h-5 w-5 text-accent" />
+                                                    Visit Timeline
+                                                </CardTitle>
+                                                <CardDescription>History of all service requests and completions.</CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="relative space-y-6 before:absolute before:left-[17px] before:top-2 before:h-[calc(100%-16px)] before:w-0.5 before:bg-secondary">
+                                                    {selectedCustomer.tickets.length === 0 ? (
+                                                        <p className="text-center py-8 text-muted-foreground italic">No visit history found.</p>
+                                                    ) : (
+                                                        selectedCustomer.tickets.map((t: any) => {
+                                                            const ticketPayments = selectedCustomer.payments.filter((p: any) => p.ticketId === t.id);
+                                                            const totalPaidForTicket = ticketPayments.reduce((sum: number, p: any) => sum + p.amount, 0);
+
+                                                            return (
+                                                                <div key={t.id} className="relative pl-10">
+                                                                    <div className={`absolute left-0 top-1 h-9 w-9 rounded-full border-4 border-background flex items-center justify-center text-white ${t.status === 'COMPLETED' ? 'bg-success' : 'bg-warning'}`}>
+                                                                        <Clock className="h-4 w-4" />
+                                                                    </div>
+                                                                    <div className="rounded-xl border bg-card p-4 shadow-sm">
+                                                                        <div className="flex flex-wrap justify-between gap-2 mb-2">
+                                                                            <div>
+                                                                                <p className="text-xs font-black text-accent uppercase tracking-tighter">{new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                                                                                <h4 className="font-bold">{t.title}</h4>
+                                                                            </div>
+                                                                            <div className="flex flex-col items-end gap-1">
+                                                                                <StatusBadge status={t.status} />
+                                                                                {totalPaidForTicket > 0 && (
+                                                                                    <span className="text-[10px] font-bold text-success">₹{totalPaidForTicket} Paid</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex justify-between items-start mb-2">
+                                                                            <div>
+                                                                                <p className="font-black text-slate-800 text-sm italic">{t.title}</p>
+                                                                                <p className="text-xs text-muted-foreground">Technician: <span className="font-bold text-blue-600">{t.worker?.name || "Unassigned"}</span></p>
+                                                                            </div>
+                                                                            <div className="text-right">
+                                                                                <PaymentStatusBadge status={t.paymentStatus} />
+                                                                                <p className="text-xs font-black mt-1">₹{t.amountReceived || 0} / ₹{t.totalAmount || 0}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        {t.workSummary && (
+                                                                            <div className="bg-secondary/20 rounded-lg p-2 mb-2">
+                                                                                <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Work Summary</p>
+                                                                                <p className="text-xs italic">{t.workSummary}</p>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        <Card className="premium-card">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <CreditCard className="h-5 w-5 text-success" />
+                                                    Payment History
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent>
+                                                {selectedCustomer.payments.length === 0 ? (
+                                                    <p className="text-center py-4 text-muted-foreground italic">No payment records found.</p>
+                                                ) : (
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-left text-sm">
+                                                            <thead className="border-b text-muted-foreground">
+                                                                <tr>
+                                                                    {["Date", "Amount", "Mode", "Reference"].map((h) => (
+                                                                        <th key={h} className="pb-3 pr-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                                                                    ))}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y">
+                                                                {selectedCustomer.payments.map((p: any) => (
+                                                                    <tr key={p.id} className="hover:bg-secondary/10">
+                                                                        <td className="py-3 text-[11px]">{new Date(p.paidAt).toLocaleDateString()}</td>
+                                                                        <td className="py-3 font-bold text-success">₹{p.amount}</td>
+                                                                        <td className="py-3"><Badge variant="outline" className="text-[10px]">{p.paymentMode}</Badge></td>
+                                                                        <td className="py-3 text-[10px] font-mono text-muted-foreground">
+                                                                            {p.ticketId ? `Ticket: ${p.ticketId.slice(0, 8)}` : 'Manual Entry'}
+                                                                        </td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
                                     </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
-
             </div>
 
             {/* Manual Ticket Modal */}
@@ -994,6 +1226,83 @@ const AdminDashboard = () => {
                     </div>
                 )
             }
+
+            {/* Payment Modal */}
+            {isPaymentModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-300">
+                    <Card className="w-full max-w-md shadow-2xl relative">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-4 top-4"
+                            onClick={() => setIsPaymentModalOpen(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <CreditCard className="h-5 w-5 text-success" />
+                                {paymentData.ticketId ? 'Complete Ticket & Record Payment' : 'Record Manual Payment'}
+                            </CardTitle>
+                            <CardDescription>
+                                {paymentData.ticketId ? 'Mark this job as finished and collect payment.' : 'Add a payment record for this customer.'}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <form onSubmit={handleAddPayment} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="amount">Collection Amount (₹) *</Label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">₹</span>
+                                        <Input
+                                            id="amount"
+                                            type="number"
+                                            placeholder="0.00"
+                                            className="pl-8"
+                                            value={paymentData.amount}
+                                            onChange={(e) => setPaymentData(p => ({ ...p, amount: e.target.value }))}
+                                            required
+                                            min="0"
+                                            step="0.01"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Payment Mode *</Label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {["Cash", "UPI", "Bank"].map(m => (
+                                            <button
+                                                key={m}
+                                                type="button"
+                                                onClick={() => setPaymentData(p => ({ ...p, paymentMode: m }))}
+                                                className={`py-2 rounded-md border text-xs font-bold transition-all ${paymentData.paymentMode === m ? 'bg-success text-white border-success' : 'border-secondary hover:border-success/50'}`}
+                                            >
+                                                {m}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                {paymentData.ticketId && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="summary">Work Summary (Optional)</Label>
+                                        <textarea
+                                            id="summary"
+                                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                            placeholder="Briefly describe the work done..."
+                                            value={paymentData.workSummary}
+                                            onChange={(e) => setPaymentData(p => ({ ...p, workSummary: e.target.value }))}
+                                        />
+                                    </div>
+                                )}
+                                <Button type="submit" className="w-full bg-success hover:bg-success/90 text-white font-bold h-12 shadow-lg mt-4">
+                                    <CheckCircle2 className="h-5 w-5 mr-2" />
+                                    Save Selection & Close
+                                </Button>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div >
     );
 };

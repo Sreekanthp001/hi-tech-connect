@@ -54,6 +54,15 @@ const WorkerDashboard = () => {
     const [pendingModalTicket, setPendingModalTicket] = useState<TicketRecord | null>(null);
     const [pendingNote, setPendingNote] = useState("");
 
+    // Payment Modal State
+    const [paymentModalTicket, setPaymentModalTicket] = useState<TicketRecord | null>(null);
+    const [paymentData, setPaymentData] = useState({
+        totalAmount: "",
+        amountReceived: "",
+        paymentMode: "CASH",
+        paymentNote: ""
+    });
+
     const fetchTickets = async () => {
         setIsLoading(true);
         try {
@@ -70,17 +79,23 @@ const WorkerDashboard = () => {
         fetchTickets();
     }, []);
 
-    const handleStatusUpdate = async (ticketId: string, newStatus: "IN_PROGRESS" | "PENDING" | "COMPLETED", note?: string) => {
+    const handleStatusUpdate = async (ticketId: string, newStatus: "IN_PROGRESS" | "PENDING" | "COMPLETED", note?: string, payment?: any) => {
         setUpdating(ticketId);
         try {
-            const response = await api.patch(`/worker/tickets/${ticketId}/status`, {
-                status: newStatus,
-                note: note
-            });
+            const payload: any = { status: newStatus };
+            if (note) payload.note = note;
+            if (payment) {
+                payload.totalAmount = payment.totalAmount;
+                payload.amountReceived = payment.amountReceived;
+                payload.paymentMode = payment.paymentMode;
+                payload.paymentNote = payment.paymentNote;
+            }
+
+            await api.patch(`/worker/tickets/${ticketId}/status`, payload);
 
             toast.success(`Ticket marked as ${STATUS_LABELS[newStatus]}!`);
 
-            // Update state
+            // Update state locally
             setTickets((prev) =>
                 prev.map((t) => (t.id === ticketId ? { ...t, status: newStatus, pendingNote: note || t.pendingNote } : t))
             );
@@ -88,6 +103,9 @@ const WorkerDashboard = () => {
             if (newStatus === "PENDING") {
                 setPendingModalTicket(null);
                 setPendingNote("");
+            }
+            if (newStatus === "COMPLETED") {
+                setPaymentModalTicket(null);
             }
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to update status.");
@@ -233,7 +251,15 @@ const WorkerDashboard = () => {
                                                         <Button
                                                             variant="default"
                                                             className="flex-1 bg-green-600 hover:bg-green-700 shadow-md font-bold h-12"
-                                                            onClick={() => handleStatusUpdate(task.id, "COMPLETED")}
+                                                            onClick={() => {
+                                                                setPaymentModalTicket(task);
+                                                                setPaymentData({
+                                                                    totalAmount: "",
+                                                                    amountReceived: "",
+                                                                    paymentMode: "CASH",
+                                                                    paymentNote: ""
+                                                                });
+                                                            }}
                                                             disabled={updating === task.id}
                                                         >
                                                             <CheckCircle2 className="h-4 w-4 mr-2" />
@@ -289,56 +315,116 @@ const WorkerDashboard = () => {
             </div>
 
             {/* Pending Reason Modal */}
-            {pendingModalTicket && (
+            // ... (existing pending modal)
+
+            {/* Payment Completion Modal */}
+            {paymentModalTicket && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
                     <Card className="w-full max-w-md shadow-2xl relative border-none">
                         <Button
                             variant="ghost"
                             size="icon"
                             className="absolute right-4 top-4 z-10"
-                            onClick={() => setPendingModalTicket(null)}
+                            onClick={() => setPaymentModalTicket(null)}
                         >
                             <X className="h-4 w-4" />
                         </Button>
 
-                        <CardHeader className="bg-yellow-50 border-b border-yellow-100 rounded-t-xl">
-                            <CardTitle className="text-xl font-black flex items-center gap-2 text-yellow-800">
-                                <AlertTriangle className="h-6 w-6" /> Mark as Pending
+                        <CardHeader className="bg-green-50 border-b border-green-100 rounded-t-xl">
+                            <CardTitle className="text-xl font-black flex items-center gap-2 text-green-800">
+                                <CheckCircle2 className="h-6 w-6" /> Finalize Payment
                             </CardTitle>
-                            <CardDescription className="text-yellow-600 font-medium italic">What is the reason for pausing this service?</CardDescription>
+                            <CardDescription className="text-green-700 font-medium italic">Record financial details for {paymentModalTicket.clientName}</CardDescription>
                         </CardHeader>
 
                         <CardContent className="p-6">
                             <form onSubmit={(e) => {
                                 e.preventDefault();
-                                handleStatusUpdate(pendingModalTicket.id, "PENDING", pendingNote);
+                                handleStatusUpdate(paymentModalTicket.id, "COMPLETED", undefined, paymentData);
                             }} className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="note" className="text-xs font-black uppercase tracking-widest text-muted-foreground">Reason Note (Required)</Label>
-                                    <textarea
-                                        id="note"
-                                        placeholder="e.g. Client not available, Part out of stock..."
-                                        className="w-full min-h-[120px] rounded-lg border-2 border-slate-200 bg-white p-3 text-sm focus:border-blue-500 focus:outline-none transition-all font-medium"
-                                        value={pendingNote}
-                                        onChange={(e) => setPendingNote(e.target.value)}
-                                        required
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-black uppercase text-muted-foreground">Total Amount</Label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-2.5 text-slate-400 font-bold">₹</span>
+                                            <input
+                                                type="number"
+                                                className="w-full rounded-lg border-2 border-slate-200 p-2 pl-7 text-sm font-bold focus:border-blue-500 outline-none"
+                                                placeholder="0.00"
+                                                value={paymentData.totalAmount}
+                                                onChange={(e) => setPaymentData({ ...paymentData, totalAmount: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs font-black uppercase text-muted-foreground">Amount Received</Label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-2.5 text-slate-400 font-bold">₹</span>
+                                            <input
+                                                type="number"
+                                                className="w-full rounded-lg border-2 border-slate-200 p-2 pl-7 text-sm font-bold focus:border-blue-500 outline-none"
+                                                placeholder="0.00"
+                                                value={paymentData.amountReceived}
+                                                onChange={(e) => setPaymentData({ ...paymentData, amountReceived: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase text-muted-foreground">Payment Mode</Label>
+                                    <select
+                                        className="w-full rounded-lg border-2 border-slate-200 p-2 text-sm font-bold focus:border-blue-500 outline-none"
+                                        value={paymentData.paymentMode}
+                                        onChange={(e) => setPaymentData({ ...paymentData, paymentMode: e.target.value })}
+                                    >
+                                        <option value="CASH">Cash</option>
+                                        <option value="UPI">UPI / QR Scan</option>
+                                        <option value="BANK">Bank Transfer</option>
+                                    </select>
+                                </div>
+
+                                {parseFloat(paymentData.amountReceived || "0") < parseFloat(paymentData.totalAmount || "0") && (
+                                    <div className="space-y-2 animate-in slide-in-from-top-2">
+                                        <Label className="text-xs font-black uppercase text-red-600">Balance Note (Required)</Label>
+                                        <textarea
+                                            className="w-full min-h-[80px] rounded-lg border-2 border-red-200 p-3 text-sm font-medium focus:border-red-500 outline-none"
+                                            placeholder="Why is it partial? e.g. Balance on next visit"
+                                            value={paymentData.paymentNote}
+                                            onChange={(e) => setPaymentData({ ...paymentData, paymentNote: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="bg-slate-50 p-3 rounded-lg flex justify-between items-center border border-slate-200">
+                                    <span className="text-[10px] font-bold uppercase text-slate-500">Auto-calculated Status:</span>
+                                    {(() => {
+                                        const tot = parseFloat(paymentData.totalAmount || "0");
+                                        const rec = parseFloat(paymentData.amountReceived || "0");
+                                        if (tot > 0 && rec === tot) return <Badge className="bg-green-600">FULL</Badge>;
+                                        if (rec > 0 && rec < tot) return <Badge className="bg-amber-500">PARTIAL</Badge>;
+                                        return <Badge variant="outline" className="text-slate-500">PENDING</Badge>;
+                                    })()}
+                                </div>
+
                                 <div className="flex gap-3 pt-2">
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="flex-1 font-bold h-12"
-                                        onClick={() => setPendingModalTicket(null)}
+                                        className="flex-1 font-bold h-12 border-2"
+                                        onClick={() => setPaymentModalTicket(null)}
                                     >
                                         Cancel
                                     </Button>
                                     <Button
                                         type="submit"
-                                        className="flex-1 bg-yellow-600 hover:bg-yellow-700 font-bold h-12 shadow-lg"
-                                        loading={updating === pendingModalTicket.id}
+                                        className="flex-1 bg-green-600 hover:bg-green-700 font-bold h-12 shadow-lg"
+                                        disabled={updating === paymentModalTicket.id}
                                     >
-                                        Submit Note
+                                        Submit & Complete
                                     </Button>
                                 </div>
                             </form>

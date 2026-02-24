@@ -36,6 +36,16 @@ const NotificationBell = () => {
         }
     };
 
+    const markAllAsRead = async () => {
+        try {
+            await api.patch("/notifications/read-all");
+            setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+            toast.success("All notifications marked as read");
+        } catch (err) {
+            toast.error("Failed to mark all as read");
+        }
+    };
+
     useEffect(() => {
         fetchNotifications();
         const interval = setInterval(fetchNotifications, 30000); // Poll every 30s
@@ -64,7 +74,7 @@ const NotificationBell = () => {
             >
                 <Bell className="h-5 w-5 text-slate-600" />
                 {unreadCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-600 text-white border-2 border-white animate-pulse">
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-red-600 text-white border-2 border-white">
                         {unreadCount}
                     </Badge>
                 )}
@@ -74,9 +84,24 @@ const NotificationBell = () => {
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-100 z-[100] animate-in slide-in-from-top-2 duration-200">
                     <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
                         <h3 className="font-black text-xs uppercase tracking-widest text-slate-800">Alerts & Status</h3>
-                        {unreadCount > 0 && (
-                            <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{unreadCount} New</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {unreadCount > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-[9px] font-black uppercase text-blue-600 hover:text-blue-700 hover:bg-blue-50 p-0 px-2"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        markAllAsRead();
+                                    }}
+                                >
+                                    Mark All Read
+                                </Button>
+                            )}
+                            {unreadCount > 0 && (
+                                <span className="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{unreadCount} New</span>
+                            )}
+                        </div>
                     </div>
                     <div className="max-h-96 overflow-y-auto">
                         {notifications.length === 0 ? (
