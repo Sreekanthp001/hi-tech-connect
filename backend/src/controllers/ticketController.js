@@ -5,6 +5,35 @@ const invoiceService = require('../services/invoiceService');
 const path = require('path');
 const fs = require('fs');
 
+const distributeWorkerSalary = async (ticketId, totalAmount) => {
+    try {
+        const assignments = await prisma.ticketAssignment.findMany({
+            where: { ticketId }
+        });
+
+        if (assignments.length === 0 || !totalAmount || totalAmount <= 0) return;
+
+        const share = totalAmount / assignments.length;
+
+        for (const assign of assignments) {
+            await prisma.workerFinance.upsert({
+                where: { workerId: assign.workerId },
+                update: {
+                    totalEarned: { increment: share }
+                },
+                create: {
+                    workerId: assign.workerId,
+                    totalEarned: share,
+                    baseSalary: 0,
+                    totalAdvance: 0
+                }
+            });
+        }
+    } catch (error) {
+        console.error("Salary distribution error:", error);
+    }
+};
+
 // 1. Public Ticket Creation
 exports.createTicket = async (req, res) => {
     try {
@@ -158,7 +187,7 @@ exports.assignWorker = async (req, res) => {
                 include: {
                     assignments: {
                         include: {
-                            worker: { select: { id: true, name: true, telegramId: true } }
+                            worker: { select: { id: true, name: true, phone: true, telegramId: true } }
                         }
                     }
                 }
@@ -197,11 +226,17 @@ exports.assignWorker = async (req, res) => {
 
         // 3. Customer Notification - Worker Assigned
         if (result.telegramId) {
-            const customerMsg = `👷 <b>Technician Assigned!</b>\n\n` +
-                `Field engineers have been assigned to your ticket.\n\n` +
-                `👨​🔧 <b>Main Tech:</b> ${primaryTech}\n` +
+            const primaryAssignment = result.assignments.find(a => a.isPrimary) || result.assignments[0];
+            const primaryWorkerPhone = primaryAssignment?.worker?.phone || 'N/A';
+            const customerMsg =
+                `👷 <b>Technician Assigned!</b>\n\n` +
+                `A field engineer has been assigned to your service request.\n\n` +
+                `👨‍🔧 <b>Technician:</b> ${primaryTech}\n` +
+                `📞 <b>Phone:</b> ${primaryWorkerPhone}\n` +
+                `🔧 <b>Service Type:</b> ${result.type}\n` +
+                `📍 <b>Location:</b> ${result.address}\n` +
                 `🆔 <b>Ticket:</b> ${result.id.slice(0, 8).toUpperCase()}\n\n` +
-                `The team will contact you or arrive at the site shortly.`;
+                `The technician will contact you or arrive at the site shortly. 🛡️`;
             telegramService.sendTelegramMessage(result.telegramId, customerMsg).catch(() => { });
         }
 
@@ -330,13 +365,22 @@ exports.updateStatus = async (req, res) => {
                 console.error("[Invoice Error] createInvoice:", err.message);
             });
 
+            // Distribute salary among assigned workers
+            distributeWorkerSalary(ticketId, updatedTicket.totalAmount).catch(err => {
+                console.error("[Salary Error] distributeWorkerSalary:", err.message);
+            });
+
             // Customer Notification - Job Completed
             if (updatedTicket.telegramId) {
-                const customerMsg = `🎉 <b>Job Completed!</b>\n\n` +
+                const baseUrl = process.env.BASE_URL || 'https://hitech-connect.in';
+                const feedbackLink = `${baseUrl}/review/${ticketId}`;
+                const customerMsg =
+                    `🎉 <b>Job Completed!</b>\n\n` +
                     `Thank you for choosing Hi-Tech Connect.\n` +
                     `The work for "<b>${updatedTicket.title}</b>" has been finished.\n\n` +
                     `⭐ <b>We value your feedback!</b>\n` +
-                    `Please share your experience here: https://hitech-connect.in/reviews\n\n` +
+                    `Please take 30 seconds to rate our service:\n` +
+                    `👉 ${feedbackLink}\n\n` +
                     `Stay secure! 🛡️`;
                 telegramService.sendTelegramMessage(updatedTicket.telegramId, customerMsg).catch(() => { });
             }
@@ -474,6 +518,11 @@ exports.adminUpdateStatus = async (req, res) => {
             // Auto-generate invoice
             invoiceService.createInvoice(ticketId).catch(err => {
                 console.error("[Invoice Error] createInvoice:", err.message);
+            });
+
+            // Distribute salary among assigned workers
+            distributeWorkerSalary(ticketId, updatedTicket.totalAmount).catch(err => {
+                console.error("[Salary Error] distributeWorkerSalary:", err.message);
             });
         }
 
@@ -638,7 +687,11 @@ exports.uploadTicketPhoto = async (req, res) => {
                 ticketId: id,
                 type,
                 imageUrl,
+                workerId: req.user?.userId || null,
                 uploadedBy: req.user.role === 'ADMIN' ? 'Admin' : 'Worker'
+            },
+            include: {
+                worker: { select: { name: true } }
             }
         });
 

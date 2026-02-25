@@ -41,8 +41,13 @@ model User {
   telegramId String?
   createdAt DateTime @default(now())
 
+  designation String?
+  finance     WorkerFinance?
+  advances    WorkerAdvance[]
+
   assignments     TicketAssignment[]
   notifications   Notification[]
+  ticketPhotos    TicketPhoto[]
 }
 
 model Ticket {
@@ -121,6 +126,8 @@ model TicketPhoto {
   id         String   @id @default(uuid())
   ticketId   String
   ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  workerId   String?
+  worker     User?    @relation(fields: [workerId], references: [id])
   type       String   // BEFORE, AFTER
   imageUrl   String
   uploadedBy String
@@ -188,4 +195,23 @@ model InternalNotification {
 
   @@index([isRead])
   @@index([createdAt])
+}
+
+model WorkerFinance {
+  id          String   @id @default(uuid())
+  workerId    String   @unique
+  worker      User     @relation(fields: [workerId], references: [id])
+  baseSalary  Float?
+  totalEarned Float    @default(0)
+  totalAdvance Float   @default(0)
+  updatedAt   DateTime @updatedAt
+}
+
+model WorkerAdvance {
+  id        String   @id @default(uuid())
+  workerId  String
+  worker    User     @relation(fields: [workerId], references: [id])
+  amount    Float
+  reason    String?
+  createdAt DateTime @default(now())
 }

@@ -12,6 +12,8 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const portfolioRoutes = require('./routes/portfolioRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
+const portfolioController = require('./controllers/portfolioController');
 
 const app = express();
 
@@ -39,9 +41,11 @@ app.use('/api/worker', workerRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/portfolio', portfolioRoutes);
+app.get('/api/public/portfolio', portfolioController.getPublicPortfolio);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/admin/expenses', require('./routes/expenseRoutes'));
 app.use('/api/telegram', require('./routes/telegramRoutes'));
+app.use('/api/feedback', feedbackRoutes);
 
 // Error handling middleware (optional but recommended)
 app.use((err, req, res, next) => {

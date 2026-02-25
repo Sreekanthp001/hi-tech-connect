@@ -4,6 +4,7 @@ const ticketController = require('../controllers/ticketController');
 const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
+const workerFinanceController = require('../controllers/workerFinanceController');
 
 router.use(authMiddleware);
 router.use(requireRole('ADMIN'));
@@ -30,6 +31,12 @@ router.get('/dashboard-stats', adminController.getDashboardStats);
 router.get('/maintenance-alerts', adminController.getMaintenanceAlerts);
 router.get('/tickets/:id/photos', ticketController.getTicketPhotos);
 router.get('/revenue-stats', adminController.getRevenueStats);
+router.get('/revenue-breakdown', adminController.getRevenueBreakdown);
+
+// Worker Finance management
+router.get('/worker-finance', workerFinanceController.getWorkerFinances);
+router.patch('/worker-finance/:workerId', workerFinanceController.updateWorkerFinance);
+router.post('/worker-advance', workerFinanceController.addWorkerAdvance);
 
 // Internal Notifications (Phase 7)
 router.get('/notifications', adminController.getNotifications);

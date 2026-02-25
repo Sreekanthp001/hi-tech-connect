@@ -1,4 +1,5 @@
 const prisma = require('../config/prisma');
+const telegramService = require('../services/telegramService');
 
 /**
  * Telegram Webhook Controller
@@ -32,7 +33,26 @@ exports.handleWebhook = async (req, res) => {
                     data: { telegramId: chatId }
                 });
                 console.log(`[Telegram Webhook] Linked chatId ${chatId} to ticket ${recentTicket.id}`);
+
+                // Send confirmation back to the customer
+                const confirmMsg =
+                    `✅ <b>You're all set, ${recentTicket.clientName}!</b>\n\n` +
+                    `Your Telegram account has been linked to your service request.\n\n` +
+                    `📋 <b>Service:</b> ${recentTicket.title}\n` +
+                    `📍 <b>Location:</b> ${recentTicket.address}\n` +
+                    `🆔 <b>Ticket:</b> ${recentTicket.id.slice(0, 8).toUpperCase()}\n\n` +
+                    `You will receive updates here when a technician is assigned and when the job is completed. 🛡️`;
+
+                telegramService.sendTelegramMessage(chatId, confirmMsg).catch(() => { });
             } else {
+                // No matching ticket found — notify the user gracefully
+                const noTicketMsg =
+                    `ℹ️ <b>Hi there!</b>\n\n` +
+                    `We couldn't find any recent pending service request to link to this account.\n\n` +
+                    `If you've just submitted a request, please wait a moment and send /start again.\n` +
+                    `For assistance, contact us directly. 📞`;
+
+                telegramService.sendTelegramMessage(chatId, noTicketMsg).catch(() => { });
                 console.log(`[Telegram Webhook] No tickets without telegramId found for chatId ${chatId}`);
             }
         }

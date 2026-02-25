@@ -659,3 +659,54 @@ exports.markNotificationRead = async (req, res) => {
         res.status(500).json({ error: "Failed to update notification" });
     }
 };
+
+/**
+ * Revenue Breakdown
+ * GET /api/admin/revenue-breakdown
+ */
+exports.getRevenueBreakdown = async (req, res) => {
+    try {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        const invoices = await prisma.invoice.findMany({
+            where: {
+                ticket: { status: 'COMPLETED' }
+            },
+            select: {
+                customerName: true,
+                totalAmount: true,
+                createdAt: true
+            }
+        });
+
+        const todayMap = {};
+        const monthMap = {};
+
+        invoices.forEach(inv => {
+            const date = new Date(inv.createdAt);
+
+            if (date >= startOfMonth) {
+                const name = inv.customerName;
+                if (!monthMap[name]) monthMap[name] = { customerName: name, totalAmount: 0, ticketCount: 0 };
+                monthMap[name].totalAmount += inv.totalAmount;
+                monthMap[name].ticketCount += 1;
+
+                if (date >= startOfToday) {
+                    if (!todayMap[name]) todayMap[name] = { customerName: name, totalAmount: 0, ticketCount: 0 };
+                    todayMap[name].totalAmount += inv.totalAmount;
+                    todayMap[name].ticketCount += 1;
+                }
+            }
+        });
+
+        res.status(200).json({
+            today: Object.values(todayMap),
+            thisMonth: Object.values(monthMap)
+        });
+    } catch (error) {
+        console.error("Revenue breakdown error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

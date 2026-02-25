@@ -12,7 +12,7 @@ import {
     Users, Ticket, CheckCircle2, AlertCircle, ArrowUpRight,
     RefreshCw, TrendingUp, UserPlus, Key, Trash2, MapPin, Plus, X, Copy,
     Search, CreditCard, History, ArrowLeft, Building, Clock, Phone, Download, Camera,
-    Bell, ShieldAlert, CalendarClock
+    Bell, ShieldAlert, CalendarClock, Edit3, MinusCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
@@ -62,7 +62,23 @@ interface Worker {
     email: string;
     phone?: string;
     telegramId?: string;
+    designation?: string;
     createdAt?: string;
+}
+
+interface WorkerFinance {
+    workerId: string;
+    name: string;
+    designation: string;
+    baseSalary: number;
+    totalEarned: number;
+    totalAdvance: number;
+    netPayable: number;
+}
+
+interface RevenueBreakdown {
+    today: { customerName: string; totalAmount: number; ticketCount: number }[];
+    thisMonth: { customerName: string; totalAmount: number; ticketCount: number }[];
 }
 
 interface WorkerPerf {
@@ -196,7 +212,20 @@ const AdminDashboard = () => {
     const [creatingExpense, setCreatingExpense] = useState(false);
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "notifications">("tickets");
+    const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "salary">("tickets");
+
+    // Revenue breakdown state
+    const [revenueBreakdown, setRevenueBreakdown] = useState<RevenueBreakdown | null>(null);
+    const [revBreakdownLoading, setRevBreakdownLoading] = useState(false);
+
+    // Worker Finance state
+    const [workerFinances, setWorkerFinances] = useState<WorkerFinance[]>([]);
+    const [financesLoading, setFinancesLoading] = useState(false);
+    const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+    const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+    const [selectedFinanceWorker, setSelectedFinanceWorker] = useState<WorkerFinance | null>(null);
+    const [advanceForm, setAdvanceForm] = useState({ amount: "", reason: "" });
+    const [salaryForm, setSalaryForm] = useState({ baseSalary: "", designation: "" });
 
     // Notifications state
     const [notifications, setNotifications] = useState<any[]>([]);
@@ -233,6 +262,30 @@ const AdminDashboard = () => {
         } catch (error) {
             console.error("Mark read error:", error);
             toast.error("Failed to update alert");
+        }
+    };
+
+    const fetchRevenueBreakdown = async () => {
+        setRevBreakdownLoading(true);
+        try {
+            const res = await api.get("/admin/revenue-breakdown");
+            setRevenueBreakdown(res.data);
+        } catch {
+            toast.error("Failed to load revenue breakdown");
+        } finally {
+            setRevBreakdownLoading(false);
+        }
+    };
+
+    const fetchWorkerFinances = async () => {
+        setFinancesLoading(true);
+        try {
+            const res = await api.get("/admin/worker-finance");
+            setWorkerFinances(res.data);
+        } catch {
+            toast.error("Failed to load worker finances");
+        } finally {
+            setFinancesLoading(false);
         }
     };
 
@@ -532,6 +585,8 @@ const AdminDashboard = () => {
         fetchMaintenanceAlerts();
         fetchRevStats();
         fetchExpenses();
+        fetchRevenueBreakdown();
+        fetchWorkerFinances();
     }, []);
 
     // ── Handlers ───────────────────────────────────────────────────────────
@@ -645,6 +700,37 @@ const AdminDashboard = () => {
             toast.error(err.response?.data?.error || "Failed to update Telegram ID.");
         } finally {
             setUpdatingTelegram(null);
+        }
+    };
+
+    const handleSalaryUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedFinanceWorker) return;
+        try {
+            await api.patch(`/admin/worker-finance/${selectedFinanceWorker.workerId}`, salaryForm);
+            toast.success("Salary and Designation updated!");
+            setIsSalaryModalOpen(false);
+            fetchWorkerFinances();
+        } catch {
+            toast.error("Failed to update salary");
+        }
+    };
+
+    const handleAddAdvance = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedFinanceWorker) return;
+        try {
+            await api.post("/admin/worker-advance", {
+                workerId: selectedFinanceWorker.workerId,
+                amount: advanceForm.amount,
+                reason: advanceForm.reason
+            });
+            toast.success("Advance recorded successfully!");
+            setIsAdvanceModalOpen(false);
+            setAdvanceForm({ amount: "", reason: "" });
+            fetchWorkerFinances();
+        } catch {
+            toast.error("Failed to record advance");
         }
     };
 
@@ -772,7 +858,7 @@ const AdminDashboard = () => {
                 </div>
 
                 <div className="mb-6 flex gap-1 rounded-xl border bg-card p-1 w-fit overflow-x-auto max-w-full">
-                    {(["tickets", "analytics", "expenses", "customers", "performance", "workers", "notifications"] as const).map((tab) => (
+                    {(["tickets", "analytics", "salary", "expenses", "customers", "performance", "workers"] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => {
@@ -782,8 +868,8 @@ const AdminDashboard = () => {
                                 if (tab === "workers") fetchWorkers();
                                 if (tab === "performance") fetchPerf();
                                 if (tab === "analytics") fetchRevStats();
-                                if (tab === "expenses") fetchExpenses();
-                                if (tab === "notifications") fetchNotifications();
+                                if (tab === "expenses") { fetchExpenses(); fetchRevenueBreakdown(); }
+                                if (tab === "salary") fetchWorkerFinances();
                             }}
                             className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition-all duration-200 whitespace-nowrap ${activeTab === tab
                                 ? "bg-primary text-primary-foreground shadow"
@@ -792,19 +878,12 @@ const AdminDashboard = () => {
                         >
                             {tab === "tickets" && <Ticket className="h-4 w-4" />}
                             {tab === "analytics" && <TrendingUp className="h-4 w-4" />}
+                            {tab === "salary" && <CreditCard className="h-4 w-4" />}
                             {tab === "expenses" && <CreditCard className="h-4 w-4" />}
                             {tab === "customers" && <Users className="h-4 w-4" />}
                             {tab === "performance" && <TrendingUp className="h-4 w-4" />}
                             {tab === "workers" && <Users className="h-4 w-4" />}
-                            {tab === "notifications" && (
-                                <div className="relative">
-                                    <Bell className="h-4 w-4" />
-                                    {notifications.filter(n => !n.isRead).length > 0 && (
-                                        <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive" />
-                                    )}
-                                </div>
-                            )}
-                            {tab === "notifications" ? "Action Required" : tab}
+                            {tab === "salary" ? "Worker Salary" : tab}
                         </button>
                     ))}
                 </div>
@@ -1431,6 +1510,57 @@ const AdminDashboard = () => {
                                 </Button>
                             </div>
 
+                            {/* Revenue Breakdown Section */}
+                            {revenueBreakdown && (
+                                <div className="grid gap-6 md:grid-cols-2">
+                                    <Card className="premium-card border-l-4 border-l-green-500">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Today's Revenue Breakdown</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {revenueBreakdown.today.length === 0 ? (
+                                                <p className="text-xs italic text-muted-foreground">No completed tickets today.</p>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    {revenueBreakdown.today.map((item, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center p-2 bg-secondary/20 rounded-lg">
+                                                            <div>
+                                                                <p className="text-xs font-bold text-foreground uppercase">{item.customerName}</p>
+                                                                <p className="text-[10px] text-muted-foreground">{item.ticketCount} Job(s)</p>
+                                                            </div>
+                                                            <p className="font-black text-green-600 italic text-sm">₹{item.totalAmount.toLocaleString()}</p>
+                                                        </div>
+                                                    ))}
+                                                    <div className="pt-2 border-t flex justify-between items-center font-black text-sm">
+                                                        <span>TOTAL TODAY</span>
+                                                        <span className="text-green-600">₹{revenueBreakdown.today.reduce((acc, curr) => acc + curr.totalAmount, 0).toLocaleString()}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="premium-card border-l-4 border-l-blue-500">
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-black uppercase tracking-widest text-muted-foreground">Monthly Customer Revenue</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="max-h-[250px] overflow-y-auto pr-2">
+                                            <div className="space-y-3">
+                                                {revenueBreakdown.thisMonth.map((item, idx) => (
+                                                    <div key={idx} className="flex justify-between items-center p-2 bg-secondary/10 rounded-lg border border-secondary/20">
+                                                        <div>
+                                                            <p className="text-xs font-bold text-slate-700 uppercase">{item.customerName}</p>
+                                                            <p className="text-[10px] text-muted-foreground">{item.ticketCount} Job(s) this month</p>
+                                                        </div>
+                                                        <p className="font-bold text-blue-600 text-sm">₹{item.totalAmount.toLocaleString()}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            )}
+
                             <div className="grid gap-8 lg:grid-cols-4">
                                 {/* Summary Card */}
                                 <Card className="premium-card">
@@ -1507,86 +1637,96 @@ const AdminDashboard = () => {
 
 
 
-                {/* ── ACTION REQUIRED TAB ─────────────────────────────────────────── */}
+                {/* ── WORKER SALARY TAB ────────────────────────────────────────────── */}
                 {
-                    activeTab === "notifications" && (
+                    activeTab === "salary" && (
                         <div className="grid gap-8 stagger-fade-in">
                             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
                                 <div>
-                                    <h2 className="text-2xl font-bold">Action Required</h2>
-                                    <p className="text-muted-foreground">Automated follow-ups for payments, warranties, and AMC.</p>
+                                    <h2 className="text-2xl font-bold">Worker Salary Management</h2>
+                                    <p className="text-muted-foreground">Manage base salaries, track earnings, and record advances.</p>
                                 </div>
-                                <Button variant="outline" size="sm" onClick={fetchNotifications} loading={notifLoading}>
-                                    <RefreshCw className={`h-4 w-4 mr-2 ${notifLoading ? 'animate-spin' : ''}`} />
-                                    Sync Alerts
+                                <Button variant="outline" size="sm" onClick={fetchWorkerFinances} loading={financesLoading}>
+                                    <RefreshCw className={`h-4 w-4 mr-2 ${financesLoading ? 'animate-spin' : ''}`} />
+                                    Refresh Finances
                                 </Button>
                             </div>
 
                             <Card className="premium-card">
-                                <CardContent className="p-0">
-                                    {notifLoading ? (
-                                        <div className="flex h-60 items-center justify-center italic text-muted-foreground">Scanning system for alerts...</div>
-                                    ) : notifications.length === 0 ? (
-                                        <div className="flex flex-col h-60 items-center justify-center text-muted-foreground">
-                                            <CheckCircle2 className="h-12 w-12 text-success/20 mb-4" />
-                                            <p className="italic font-medium">System Clear: No urgent follow-ups required.</p>
-                                        </div>
+                                <CardHeader>
+                                    <CardTitle className="text-xl">Salary Registry</CardTitle>
+                                    <CardDescription>Consolidated financial status for all field technicians.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {financesLoading ? (
+                                        <div className="flex h-60 items-center justify-center italic text-muted-foreground">Loading financial data...</div>
+                                    ) : workerFinances.length === 0 ? (
+                                        <div className="flex h-60 items-center justify-center text-muted-foreground italic">No worker financial data found.</div>
                                     ) : (
-                                        <div className="divide-y">
-                                            {notifications.map((n) => (
-                                                <div key={n.id} className={`flex items-center justify-between p-6 transition-colors ${n.isRead ? 'opacity-60 bg-secondary/5' : 'bg-primary/5'}`}>
-                                                    <div className="flex items-start gap-4">
-                                                        <div className={`mt-1 p-2 rounded-lg ${n.type === 'PAYMENT' ? 'bg-green-100 text-green-600' :
-                                                            n.type === 'WARRANTY' ? 'bg-red-100 text-red-600' :
-                                                                'bg-blue-100 text-blue-600'
-                                                            }`}>
-                                                            {n.type === 'PAYMENT' && <CreditCard className="h-5 w-5" />}
-                                                            {n.type === 'WARRANTY' && <ShieldAlert className="h-5 w-5" />}
-                                                            {n.type === 'AMC' && <CalendarClock className="h-5 w-5" />}
-                                                        </div>
-                                                        <div>
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter">
-                                                                    {n.type} ALERT
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="border-b text-muted-foreground">
+                                                    <tr>
+                                                        {["Worker", "Designation", "Base Salary", "Total Earned", "Advances", "Net Payable", "Actions"].map((h) => (
+                                                            <th key={h} className="pb-3 pr-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y text-slate-700">
+                                                    {workerFinances.map((f) => (
+                                                        <tr key={f.workerId} className="hover:bg-secondary/10 group transition-colors">
+                                                            <td className="py-4 pr-4">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs uppercase">
+                                                                        {f.name[0]}
+                                                                    </div>
+                                                                    <span className="font-bold underline decoration-primary/20 decoration-2 underline-offset-4">{f.name}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-4 pr-4">
+                                                                <Badge variant="secondary" className="bg-slate-100 text-[10px] font-black uppercase text-slate-600">
+                                                                    {f.designation}
                                                                 </Badge>
-                                                                <span className="text-[10px] text-muted-foreground font-medium">
-                                                                    {new Date(n.createdAt).toLocaleDateString()} • {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                            </td>
+                                                            <td className="py-4 pr-4 font-bold">₹{f.baseSalary.toLocaleString()}</td>
+                                                            <td className="py-4 pr-4 font-bold text-green-600">₹{f.totalEarned.toLocaleString()}</td>
+                                                            <td className="py-4 pr-4 font-bold text-destructive">₹{f.totalAdvance.toLocaleString()}</td>
+                                                            <td className="py-4 pr-4">
+                                                                <span className={`font-black text-sm px-3 py-1 rounded-full ${f.netPayable >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                                                                    ₹{f.netPayable.toLocaleString()}
                                                                 </span>
-                                                            </div>
-                                                            <p className="font-bold text-slate-800 leading-tight">{n.message}</p>
-                                                            {!n.isRead && (
-                                                                <p className="text-[10px] text-accent font-black uppercase mt-2">Urgent Action Recommended</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {!n.isRead ? (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="text-primary hover:bg-primary/10 font-bold text-[10px] uppercase h-8 px-4"
-                                                                onClick={() => handleMarkRead(n.id)}
-                                                            >
-                                                                Mark Resolved
-                                                            </Button>
-                                                        ) : (
-                                                            <Badge variant="secondary" className="bg-secondary/20 text-muted-foreground font-bold">RESOLVED</Badge>
-                                                        )}
-                                                        {n.ticketId && (
-                                                            <Button
-                                                                variant="secondary"
-                                                                size="sm"
-                                                                className="h-8 w-8 p-0"
-                                                                onClick={() => {
-                                                                    setActiveTab("tickets");
-                                                                }}
-                                                            >
-                                                                <ArrowUpRight className="h-4 w-4" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                            </td>
+                                                            <td className="py-4">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-8 text-[10px] font-black uppercase tracking-widest border-primary/30 text-primary hover:bg-primary/10"
+                                                                        onClick={() => {
+                                                                            setSelectedFinanceWorker(f);
+                                                                            setSalaryForm({ baseSalary: f.baseSalary.toString(), designation: f.designation });
+                                                                            setIsSalaryModalOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        Update Base
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="ghost"
+                                                                        className="h-8 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/10"
+                                                                        onClick={() => {
+                                                                            setSelectedFinanceWorker(f);
+                                                                            setIsAdvanceModalOpen(true);
+                                                                        }}
+                                                                    >
+                                                                        Add Advance
+                                                                    </Button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     )}
                                 </CardContent>
@@ -2177,6 +2317,97 @@ const AdminDashboard = () => {
                         </div>
                     )}
 
+
+                {/* Salary Update Modal */}
+                {isSalaryModalOpen && selectedFinanceWorker && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-300">
+                        <Card className="w-full max-w-sm shadow-2xl relative">
+                            <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={() => setIsSalaryModalOpen(false)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Edit3 className="h-5 w-5 text-primary" />
+                                    Edit Salary & Designation
+                                </CardTitle>
+                                <CardDescription>Update {selectedFinanceWorker.name}'s base contract details.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={handleSalaryUpdate} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="baseSalary">Monthly Base Salary (₹)</Label>
+                                        <Input
+                                            id="baseSalary"
+                                            type="number"
+                                            value={salaryForm.baseSalary}
+                                            onChange={(e) => setSalaryForm(p => ({ ...p, baseSalary: e.target.value }))}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="designation">Designation</Label>
+                                        <Input
+                                            id="designation"
+                                            value={salaryForm.designation}
+                                            onChange={(e) => setSalaryForm(p => ({ ...p, designation: e.target.value }))}
+                                            required
+                                        />
+                                    </div>
+                                    <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-12 shadow-lg mt-4">
+                                        Update Financial Contract
+                                    </Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Advance Addition Modal */}
+                {isAdvanceModalOpen && selectedFinanceWorker && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-4 backdrop-blur-md animate-in fade-in duration-300">
+                        <Card className="w-full max-w-sm shadow-2xl relative">
+                            <Button variant="ghost" size="icon" className="absolute right-4 top-4" onClick={() => setIsAdvanceModalOpen(false)}>
+                                <X className="h-4 w-4" />
+                            </Button>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <MinusCircle className="h-5 w-5 text-destructive" />
+                                    Record Financial Advance
+                                </CardTitle>
+                                <CardDescription>Deducted from net payable for {selectedFinanceWorker.name}.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <form onSubmit={handleAddAdvance} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="advAmount">Advance Amount (₹)</Label>
+                                        <Input
+                                            id="advAmount"
+                                            type="number"
+                                            placeholder="0"
+                                            value={advanceForm.amount}
+                                            onChange={(e) => setAdvanceForm(p => ({ ...p, amount: e.target.value }))}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="reason">Reason / Notes</Label>
+                                        <textarea
+                                            id="reason"
+                                            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                            placeholder="Purpose of advance..."
+                                            value={advanceForm.reason}
+                                            onChange={(e) => setAdvanceForm(p => ({ ...p, reason: e.target.value }))}
+                                            required
+                                        />
+                                    </div>
+                                    <Button type="submit" className="w-full bg-destructive hover:bg-destructive/90 text-white font-bold h-12 shadow-lg mt-4">
+                                        Deduct & Save Advance
+                                    </Button>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
 
                 {/* Expense Modal */}
                 {

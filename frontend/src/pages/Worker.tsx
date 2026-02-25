@@ -4,7 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
-import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { toast } from "sonner";
@@ -14,6 +15,8 @@ interface TicketPhoto {
     id: string;
     type: "BEFORE" | "AFTER";
     imageUrl: string;
+    uploadedBy?: string;
+    worker?: { name: string } | null;
 }
 
 interface TicketRecord {
@@ -74,6 +77,11 @@ const WorkerDashboard = () => {
         paymentMode: "CASH",
         paymentNote: ""
     });
+
+    // Password Change Modal State
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
 
     const fetchTickets = async () => {
         setIsLoading(true);
@@ -341,21 +349,29 @@ const WorkerDashboard = () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* Photo Previews */}
+                                                    {/* Photo Previews — all photos per type */}
                                                     {task.ticketPhotos && task.ticketPhotos.length > 0 && (
-                                                        <div className="grid grid-cols-2 gap-2 mt-2">
+                                                        <div className="space-y-2 mt-2">
                                                             {['BEFORE', 'AFTER'].map(type => {
-                                                                const photo = task.ticketPhotos?.find(p => p.type === type);
-                                                                if (!photo) return null;
+                                                                const photos = task.ticketPhotos?.filter(p => p.type === type) || [];
+                                                                if (photos.length === 0) return null;
                                                                 return (
-                                                                    <div key={type} className="relative rounded-lg overflow-hidden aspect-video border bg-white shadow-sm">
-                                                                        <img
-                                                                            src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}${photo.imageUrl}`}
-                                                                            alt={type}
-                                                                            className="object-cover w-full h-full"
-                                                                        />
-                                                                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white font-black text-center uppercase p-0.5">
-                                                                            {type}
+                                                                    <div key={type}>
+                                                                        <span className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded ${type === 'BEFORE' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
+                                                                            }`}>{type}</span>
+                                                                        <div className={`grid gap-2 mt-1 ${photos.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                                                                            {photos.map(photo => (
+                                                                                <div key={photo.id} className="relative rounded-lg overflow-hidden aspect-video border bg-white shadow-sm">
+                                                                                    <img
+                                                                                        src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}${photo.imageUrl}`}
+                                                                                        alt={type}
+                                                                                        className="object-cover w-full h-full"
+                                                                                    />
+                                                                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[7px] text-white font-bold text-center uppercase p-0.5 truncate">
+                                                                                        📸 {photo.worker?.name || photo.uploadedBy || 'Worker'}
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -482,6 +498,12 @@ const WorkerDashboard = () => {
                                     <RefreshCw className={`h-5 w-5 ${isLoading ? "animate-spin" : ""}`} />
                                 </div>
                                 <span className="font-bold uppercase tracking-wider text-xs">Sync Records</span>
+                            </Button>
+                            <Button variant="outline" className="justify-start gap-4 h-auto py-5 px-6 border-2 hover:border-indigo-600 group transition-all" onClick={() => setShowPasswordModal(true)}>
+                                <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                                    <KeyRound className="h-5 w-5" />
+                                </div>
+                                <span className="font-bold uppercase tracking-wider text-xs">Change Password</span>
                             </Button>
                             <Button variant="outline" className="justify-start gap-4 h-auto py-5 px-6 border-2 hover:border-destructive group transition-all" onClick={logout}>
                                 <div className="p-2 rounded-lg bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white transition-colors">
@@ -655,8 +677,115 @@ const WorkerDashboard = () => {
                     </Card>
                 </div>
             )}
+
+            {/* Change Password Modal */}
+            {showPasswordModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                    <Card className="w-full max-w-md shadow-2xl relative border-none">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-4 top-4 z-10"
+                            onClick={() => { setShowPasswordModal(false); setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); }}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                        <CardHeader className="bg-indigo-50 border-b border-indigo-100 rounded-t-xl">
+                            <CardTitle className="text-xl font-black flex items-center gap-2 text-indigo-800">
+                                <KeyRound className="h-5 w-5" /> Change Password
+                            </CardTitle>
+                            <CardDescription className="text-indigo-600 font-medium italic">Update your login credentials securely</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                            <form
+                                onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    if (passwordForm.newPassword.length < 6) {
+                                        toast.error("New password must be at least 6 characters.");
+                                        return;
+                                    }
+                                    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+                                        toast.error("Passwords do not match.");
+                                        return;
+                                    }
+                                    setIsChangingPassword(true);
+                                    try {
+                                        await api.patch("/worker/change-password", {
+                                            currentPassword: passwordForm.currentPassword,
+                                            newPassword: passwordForm.newPassword
+                                        });
+                                        toast.success("Password updated successfully!");
+                                        setShowPasswordModal(false);
+                                        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                                    } catch (err: any) {
+                                        toast.error(err.response?.data?.error || "Failed to update password.");
+                                    } finally {
+                                        setIsChangingPassword(false);
+                                    }
+                                }}
+                                className="space-y-4"
+                            >
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase text-muted-foreground">Current Password</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="Enter current password"
+                                        value={passwordForm.currentPassword}
+                                        onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                                        required
+                                        autoComplete="current-password"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase text-muted-foreground">New Password</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="Minimum 6 characters"
+                                        value={passwordForm.newPassword}
+                                        onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                                        required
+                                        autoComplete="new-password"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase text-muted-foreground">Confirm New Password</Label>
+                                    <Input
+                                        type="password"
+                                        placeholder="Re-enter new password"
+                                        value={passwordForm.confirmPassword}
+                                        onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                                        required
+                                        autoComplete="new-password"
+                                    />
+                                </div>
+                                {passwordForm.newPassword && passwordForm.confirmPassword && passwordForm.newPassword !== passwordForm.confirmPassword && (
+                                    <p className="text-xs text-red-600 font-bold">⚠ Passwords do not match</p>
+                                )}
+                                <div className="flex gap-3 pt-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="flex-1 font-bold h-11 border-2"
+                                        onClick={() => { setShowPasswordModal(false); setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" }); }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 font-bold h-11 shadow-lg"
+                                        disabled={isChangingPassword}
+                                    >
+                                        {isChangingPassword ? "Updating..." : "Update Password"}
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 };
 
 export default WorkerDashboard;
+

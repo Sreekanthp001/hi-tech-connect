@@ -59,6 +59,7 @@ const App = () => (
               }
             />
             <Route path="/review/:ticketId" element={<Review />} />
+            <Route path="/feedback/:ticketId" element={<Review />} />
             <Route path="/reviews" element={<Reviews />} />
             <Route path="/our-works" element={<OurWorks />} />
             <Route path="/about" element={<About />} />

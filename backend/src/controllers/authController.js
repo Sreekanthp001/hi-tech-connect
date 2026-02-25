@@ -47,3 +47,37 @@ exports.login = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// Worker: Change own password (JWT required)
+exports.changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: "currentPassword and newPassword are required" });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: "New password must be at least 6 characters" });
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ error: "Current password is incorrect" });
+        }
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+        await prisma.user.update({
+            where: { id: req.user.userId },
+            data: { password: hashed }
+        });
+
+        res.status(200).json({ message: "Password updated successfully" });
+    } catch (error) {
+        console.error("Change password error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
