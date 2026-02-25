@@ -20,18 +20,22 @@ const app = express();
 // Middleware
 app.use(express.json());
 
-const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
-    process.env.FRONTEND_URL
-].filter(Boolean);
+const allowedOrigins = process.env.NODE_ENV === "production"
+    ? [process.env.FRONTEND_URL]
+    : [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://192.168.0.103:8080",
+        process.env.FRONTEND_URL
+    ];
 
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.filter(Boolean).includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            callback(new Error("Not allowed by CORS"));
         }
     },
     credentials: true
