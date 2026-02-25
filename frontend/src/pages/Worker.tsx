@@ -4,11 +4,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
-import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import NotificationBell from "@/components/ui/NotificationBell";
+
+interface TicketPhoto {
+    id: string;
+    type: "BEFORE" | "AFTER";
+    imageUrl: string;
+}
 
 interface TicketRecord {
     id: string;
@@ -21,8 +27,14 @@ interface TicketRecord {
     longitude?: number;
     type: string;
     status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+    ticketProgress?: "REQUESTED" | "ASSIGNED" | "ON_THE_WAY" | "IN_PROGRESS" | "COMPLETED";
     pendingNote?: string;
     createdAt: string;
+    ticketPhotos?: TicketPhoto[];
+    assignments?: {
+        isPrimary: boolean;
+        worker: { id: string; name: string }
+    }[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -78,6 +90,50 @@ const WorkerDashboard = () => {
     useEffect(() => {
         fetchTickets();
     }, []);
+
+    const handleProgressUpdate = async (ticketId: string, progress: string) => {
+        setUpdating(ticketId);
+        try {
+            await api.patch(`/worker/tickets/${ticketId}/progress`, { progress });
+            toast.success("Progress updated!");
+            setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, ticketProgress: progress as any } : t));
+        } catch {
+            toast.error("Failed to update progress.");
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const handlePhotoUpload = async (ticketId: string, type: string, file: File) => {
+        setUpdating(ticketId);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("type", type);
+
+            const res = await api.post(`/worker/tickets/${ticketId}/upload-photo`, formData, {
+                headers: { "Content-Type": "multipart/form-data" }
+            });
+
+            toast.success(`${type} photo uploaded!`);
+
+            // Update local state with the new photo
+            setTickets(prev => prev.map(t => {
+                if (t.id === ticketId) {
+                    const existingPhotos = t.ticketPhotos || [];
+                    return {
+                        ...t,
+                        ticketPhotos: [...existingPhotos, res.data]
+                    };
+                }
+                return t;
+            }));
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to upload photo.");
+        } finally {
+            setUpdating(null);
+        }
+    };
 
     const handleStatusUpdate = async (ticketId: string, newStatus: "IN_PROGRESS" | "PENDING" | "COMPLETED", note?: string, payment?: any) => {
         setUpdating(ticketId);
@@ -170,7 +226,14 @@ const WorkerDashboard = () => {
                                         <div className="p-6">
                                             <div className="flex justify-between items-start mb-4">
                                                 <div>
-                                                    <span className="text-[10px] font-black text-blue-600 tracking-tighter bg-blue-50 px-2 py-0.5 rounded leading-none">{task.id.slice(0, 8).toUpperCase()}</span>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] font-black text-blue-600 tracking-tighter bg-blue-50 px-2 py-0.5 rounded leading-none">{task.id.slice(0, 8).toUpperCase()}</span>
+                                                        {task.assignments?.find(a => a.worker.id === user?.id) && (
+                                                            <Badge className={`text-[10px] font-black uppercase tracking-widest ${task.assignments.find(a => a.worker.id === user?.id)?.isPrimary ? 'bg-primary text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                                                {task.assignments.find(a => a.worker.id === user?.id)?.isPrimary ? 'Main Tech' : 'Support Member'}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
                                                     <h3 className="text-xl font-bold group-hover:text-blue-600 transition-colors mt-1">{task.clientName}</h3>
                                                     <div className="flex items-center gap-2 text-blue-600 font-bold mt-1">
                                                         <PhoneCall className="h-3 w-3" />
@@ -192,6 +255,115 @@ const WorkerDashboard = () => {
                                                     </div>
                                                 )}
                                             </div>
+
+                                            {/* Phase 3 & 4: Progress & Photos */}
+                                            {task.status === "IN_PROGRESS" && (
+                                                <div className="mb-6 space-y-4 bg-blue-50/30 p-4 rounded-xl border border-blue-100">
+                                                    <div className="flex flex-col gap-2">
+                                                        <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Update Live Progress</span>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {[
+                                                                { key: "ON_THE_WAY", label: "On Way", icon: Navigation },
+                                                                { key: "IN_PROGRESS", label: "Working", icon: Play },
+                                                                { key: "COMPLETED", label: "Testing", icon: Zap },
+                                                            ].map(step => (
+                                                                <Button
+                                                                    key={step.key}
+                                                                    variant={task.ticketProgress === step.key ? "default" : "outline"}
+                                                                    size="sm"
+                                                                    className={`h-8 text-[10px] font-black uppercase tracking-widest gap-2 ${task.ticketProgress === step.key ? 'bg-blue-600' : ''}`}
+                                                                    onClick={() => handleProgressUpdate(task.id, step.key)}
+                                                                    disabled={updating === task.id}
+                                                                >
+                                                                    <step.icon className="h-3 w-3" />
+                                                                    {step.label}
+                                                                </Button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-100">
+                                                        <div className="relative">
+                                                            <input
+                                                                type="file"
+                                                                id={`before-${task.id}`}
+                                                                accept="image/*"
+                                                                capture="environment"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) handlePhotoUpload(task.id, "BEFORE", file);
+                                                                }}
+                                                                disabled={updating === task.id}
+                                                            />
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="w-full h-10 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 font-bold text-xs bg-white"
+                                                                onClick={() => document.getElementById(`before-${task.id}`)?.click()}
+                                                                disabled={updating === task.id}
+                                                            >
+                                                                <Camera className="h-4 w-4 mr-2" /> Before
+                                                            </Button>
+                                                            {task.ticketPhotos?.some(p => p.type === 'BEFORE') && (
+                                                                <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white border border-white shadow-sm scale-110">
+                                                                    <CheckCircle2 className="h-2.5 w-2.5" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="file"
+                                                                id={`after-${task.id}`}
+                                                                accept="image/*"
+                                                                capture="environment"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) handlePhotoUpload(task.id, "AFTER", file);
+                                                                }}
+                                                                disabled={updating === task.id}
+                                                            />
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="w-full h-10 border-dashed border-2 hover:border-green-500 hover:text-green-600 font-bold text-xs bg-white"
+                                                                onClick={() => document.getElementById(`after-${task.id}`)?.click()}
+                                                                disabled={updating === task.id}
+                                                            >
+                                                                <Camera className="h-4 w-4 mr-2" /> After
+                                                            </Button>
+                                                            {task.ticketPhotos?.some(p => p.type === 'AFTER') && (
+                                                                <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white border border-white shadow-sm scale-110">
+                                                                    <CheckCircle2 className="h-2.5 w-2.5" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Photo Previews */}
+                                                    {task.ticketPhotos && task.ticketPhotos.length > 0 && (
+                                                        <div className="grid grid-cols-2 gap-2 mt-2">
+                                                            {['BEFORE', 'AFTER'].map(type => {
+                                                                const photo = task.ticketPhotos?.find(p => p.type === type);
+                                                                if (!photo) return null;
+                                                                return (
+                                                                    <div key={type} className="relative rounded-lg overflow-hidden aspect-video border bg-white shadow-sm">
+                                                                        <img
+                                                                            src={`${import.meta.env.VITE_API_URL?.replace('/api', '')}${photo.imageUrl}`}
+                                                                            alt={type}
+                                                                            className="object-cover w-full h-full"
+                                                                        />
+                                                                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-[8px] text-white font-black text-center uppercase p-0.5">
+                                                                            {type}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
                                                 <div className="flex flex-col gap-1 text-muted-foreground bg-slate-50 p-3 rounded-lg border border-slate-100">
@@ -252,6 +424,15 @@ const WorkerDashboard = () => {
                                                             variant="default"
                                                             className="flex-1 bg-green-600 hover:bg-green-700 shadow-md font-bold h-12"
                                                             onClick={() => {
+                                                                const photos = task.ticketPhotos || [];
+                                                                const hasBefore = photos.some(p => p.type === 'BEFORE');
+                                                                const hasAfter = photos.some(p => p.type === 'AFTER');
+
+                                                                if (!hasBefore || !hasAfter) {
+                                                                    toast.error("Before and After photos are mandatory.");
+                                                                    return;
+                                                                }
+
                                                                 setPaymentModalTicket(task);
                                                                 setPaymentData({
                                                                     totalAmount: "",
@@ -309,13 +490,55 @@ const WorkerDashboard = () => {
                                 <span className="font-bold uppercase tracking-wider text-xs">Sign Out</span>
                             </Button>
                         </div>
-
                     </div>
                 </div>
             </div>
 
             {/* Pending Reason Modal */}
-            // ... (existing pending modal)
+            {pendingModalTicket && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                    <Card className="w-full max-w-md shadow-2xl relative border-none">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-4 top-4 z-10"
+                            onClick={() => setPendingModalTicket(null)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                        <CardHeader className="bg-yellow-50 border-b border-yellow-100 rounded-t-xl">
+                            <CardTitle className="text-xl font-black flex items-center gap-2 text-yellow-800">
+                                <AlertTriangle className="h-6 w-6" /> Mark as Pending
+                            </CardTitle>
+                            <CardDescription className="text-yellow-700 font-medium italic">Why is this job being paused?</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-6">
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="note" className="text-xs font-black uppercase text-muted-foreground">Reason / Note</Label>
+                                    <textarea
+                                        id="note"
+                                        className="w-full min-h-[120px] rounded-lg border-2 border-slate-200 p-4 text-sm font-medium focus:border-blue-500 outline-none transition-all"
+                                        placeholder="e.g. Parts required, customer not available, etc."
+                                        value={pendingNote}
+                                        onChange={(e) => setPendingNote(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex gap-3">
+                                    <Button variant="outline" className="flex-1 font-bold h-12 border-2" onClick={() => setPendingModalTicket(null)}>Cancel</Button>
+                                    <Button
+                                        className="flex-1 bg-yellow-600 hover:bg-yellow-700 font-bold h-12 shadow-lg"
+                                        onClick={() => handleStatusUpdate(pendingModalTicket.id, "PENDING", pendingNote)}
+                                        disabled={!pendingNote || updating === pendingModalTicket.id}
+                                    >
+                                        Confirm Pending
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* Payment Completion Modal */}
             {paymentModalTicket && (

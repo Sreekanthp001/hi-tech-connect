@@ -38,3 +38,20 @@ exports.markAsRead = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+// 3. Mark all notifications as read for the current user
+exports.markAllAsRead = async (req, res) => {
+    try {
+        const userId = req.user.userId;
+
+        await prisma.notification.updateMany({
+            where: { userId, isRead: false },
+            data: { isRead: true }
+        });
+
+        res.status(200).json({ success: true, message: "All notifications marked as read" });
+    } catch (error) {
+        console.error("Mark all as read error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};

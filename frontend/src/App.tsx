@@ -13,6 +13,10 @@ import Client from "./pages/Client";
 import Review from "./pages/Review";
 import Reviews from "./pages/Reviews";
 import OurWorks from "./pages/OurWorks";
+import About from "./pages/branding/About";
+import Certifications from "./pages/branding/Certifications";
+import GSTInfo from "./pages/branding/GSTInfo";
+import Contact from "./pages/branding/Contact";
 
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -57,6 +61,10 @@ const App = () => (
             <Route path="/review/:ticketId" element={<Review />} />
             <Route path="/reviews" element={<Reviews />} />
             <Route path="/our-works" element={<OurWorks />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/certifications" element={<Certifications />} />
+            <Route path="/gst-info" element={<GSTInfo />} />
+            <Route path="/contact" element={<Contact />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

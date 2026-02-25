@@ -25,15 +25,15 @@ exports.onTicketCreated = async (ticket) => {
 };
 
 // B) When Admin Assigns Worker -> Notify WORKER
-exports.onWorkerAssigned = async (ticket) => {
+exports.onWorkerAssigned = async (data) => {
     try {
-        if (!ticket.workerId) return;
+        if (!data.workerId) return;
 
         await prisma.notification.create({
             data: {
-                userId: ticket.workerId,
+                userId: data.workerId,
                 title: "New Assignment",
-                message: `You have been assigned a ${ticket.type} at ${ticket.address}`
+                message: `You have been assigned a ${data.type} at ${data.address}`
             }
         });
     } catch (err) {
@@ -45,7 +45,10 @@ exports.onWorkerAssigned = async (ticket) => {
 exports.onTicketCompleted = async (ticket) => {
     try {
         const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
-        const workerName = ticket.worker?.name || "A technician";
+
+        // Find primary worker name or fallback to "A technician"
+        const primaryAssignment = ticket.assignments?.find(a => a.isPrimary);
+        const workerName = primaryAssignment?.worker?.name || ticket.assignments?.[0]?.worker?.name || "A technician";
 
         const notifications = admins.map(admin => ({
             userId: admin.id,
@@ -65,7 +68,10 @@ exports.onTicketCompleted = async (ticket) => {
 exports.onTicketPending = async (ticket, note) => {
     try {
         const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
-        const workerName = ticket.worker?.name || "A technician";
+
+        // Find primary worker name or fallback to "A technician"
+        const primaryAssignment = ticket.assignments?.find(a => a.isPrimary);
+        const workerName = primaryAssignment?.worker?.name || ticket.assignments?.[0]?.worker?.name || "A technician";
 
         const notifications = admins.map(admin => ({
             userId: admin.id,

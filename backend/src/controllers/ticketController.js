@@ -1,5 +1,9 @@
 const prisma = require('../config/prisma');
 const notifications = require('../services/notificationService');
+const telegramService = require('../services/telegramService');
+const invoiceService = require('../services/invoiceService');
+const path = require('path');
+const fs = require('fs');
 
 // 1. Public Ticket Creation
 exports.createTicket = async (req, res) => {
@@ -58,6 +62,17 @@ exports.createTicket = async (req, res) => {
             console.error("[Notification Error] onTicketCreated:", err.message);
         });
 
+        // Customer Confirmation (Phase 13)
+        if (ticket.telegramId) {
+            const customerMsg = `✅ <b>Booking Confirmed!</b>\n\n` +
+                `Hello ${ticket.clientName},\n` +
+                `Your service request "<b>${ticket.title}</b>" has been received.\n\n` +
+                `📍 <b>Location:</b> ${ticket.address}\n` +
+                `🆔 <b>Ticket:</b> ${ticket.id.slice(0, 8).toUpperCase()}\n\n` +
+                `Our admin will assign a technician shortly.`;
+            telegramService.sendTelegramMessage(ticket.telegramId, customerMsg).catch(() => { });
+        }
+
         res.status(201).json(ticket);
     } catch (error) {
         console.error("Create ticket error:", error);
@@ -71,9 +86,16 @@ exports.getAllTickets = async (req, res) => {
         const tickets = await prisma.ticket.findMany({
             orderBy: { createdAt: 'desc' },
             include: {
-                worker: {
-                    select: { id: true, name: true, role: true }
-                }
+                assignments: {
+                    include: {
+                        worker: { select: { id: true, name: true, role: true } }
+                    }
+                },
+                payments: {
+                    orderBy: { createdAt: 'desc' }
+                },
+                ticketPhotos: true,
+                invoice: true
             }
         });
         res.status(200).json(tickets);
@@ -87,31 +109,103 @@ exports.getAllTickets = async (req, res) => {
 exports.assignWorker = async (req, res) => {
     try {
         const { ticketId } = req.params;
-        const { workerId } = req.body;
+        const { workerId, workers } = req.body;
 
-        if (!workerId) {
-            return res.status(400).json({ error: "Worker ID is required" });
+        // Support both single workerId and multiple workers array
+        let assignmentData = [];
+        if (workers && Array.isArray(workers)) {
+            assignmentData = workers.map(w => ({
+                workerId: w.workerId || w.id,
+                isPrimary: w.isPrimary || false
+            }));
+        } else if (workerId) {
+            assignmentData = [{ workerId, isPrimary: true }];
         }
 
-        const worker = await prisma.user.findUnique({ where: { id: workerId } });
-        if (!worker || worker.role !== 'WORKER') {
-            return res.status(400).json({ error: "Invalid worker ID" });
+        if (assignmentData.length === 0) {
+            return res.status(400).json({ error: "At least one worker must be assigned" });
         }
 
-        const updatedTicket = await prisma.ticket.update({
-            where: { id: ticketId },
-            data: { workerId, status: 'IN_PROGRESS' },
-            include: {
-                worker: { select: { id: true, name: true, phone: true } }
+        // Validate all workers
+        for (const entry of assignmentData) {
+            const w = await prisma.user.findUnique({ where: { id: entry.workerId } });
+            if (!w || w.role !== 'WORKER') {
+                return res.status(400).json({ error: `Invalid worker ID: ${entry.workerId}` });
+            }
+        }
+
+        // Use transaction to ensure data consistency
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Delete existing assignments
+            await tx.ticketAssignment.deleteMany({ where: { ticketId } });
+
+            // 2. Create new assignments
+            await tx.ticketAssignment.createMany({
+                data: assignmentData.map(w => ({
+                    ticketId,
+                    workerId: w.workerId,
+                    isPrimary: w.isPrimary || false
+                }))
+            });
+
+
+            // 4. Update ticket status and primary worker
+            const updatedTicket = await tx.ticket.update({
+                where: { id: ticketId },
+                data: {
+                    status: 'IN_PROGRESS'
+                },
+                include: {
+                    assignments: {
+                        include: {
+                            worker: { select: { id: true, name: true, telegramId: true } }
+                        }
+                    }
+                }
+            });
+
+            return updatedTicket;
+        });
+
+        // Fire-and-forget notifications
+        // 1. Internal notification
+        result.assignments.forEach(assign => {
+            notifications.onWorkerAssigned({ ...result, workerId: assign.workerId }).catch(err => {
+                console.error("[Notification Error] onWorkerAssigned:", err.message);
+            });
+        });
+
+        // 2. Telegram Notifications for ALL assigned workers (Phase 11 format)
+        const primaryTech = result.assignments.find(a => a.isPrimary)?.worker.name || 'N/A';
+        const supportTechs = result.assignments.filter(a => !a.isPrimary).map(a => a.worker.name);
+
+        result.assignments.forEach(assign => {
+            if (assign.worker.telegramId) {
+                const botMessage = `🔔 <b>NEW WORK ASSIGNED</b>\n\n` +
+                    `🆔 <b>Ticket ID:</b> ${result.id.slice(0, 8).toUpperCase()}\n` +
+                    `👤 <b>Customer:</b> ${result.clientName}\n` +
+                    `📞 <b>Phone:</b> ${result.clientPhone}\n` +
+                    `📍 <b>Location:</b> ${result.address}\n\n` +
+                    `👨​🔧 <b>Main Technician:</b> ${primaryTech}\n` +
+                    `👷 <b>Support Members:</b>\n${supportTechs.length > 0 ? supportTechs.map(name => `- ${name}`).join('\n') : '- None'}\n\n` +
+                    `Please login and update status.`;
+
+                telegramService.sendTelegramMessage(assign.worker.telegramId, botMessage)
+                    .catch(err => console.error(`[Telegram Error] Failed to send to ${assign.worker.name}:`, err.message));
             }
         });
 
-        // Fire-and-forget notification to WORKER
-        notifications.onWorkerAssigned(updatedTicket).catch(err => {
-            console.error("[Notification Error] onWorkerAssigned:", err.message);
-        });
+        // 3. Customer Notification - Worker Assigned
+        if (result.telegramId) {
+            const customerMsg = `👷 <b>Technician Assigned!</b>\n\n` +
+                `Field engineers have been assigned to your ticket.\n\n` +
+                `👨​🔧 <b>Main Tech:</b> ${primaryTech}\n` +
+                `🆔 <b>Ticket:</b> ${result.id.slice(0, 8).toUpperCase()}\n\n` +
+                `The team will contact you or arrive at the site shortly.`;
+            telegramService.sendTelegramMessage(result.telegramId, customerMsg).catch(() => { });
+        }
 
-        res.status(200).json(updatedTicket);
+        res.status(200).json(result);
     } catch (error) {
         console.error("Assign worker error:", error);
         if (error.code === 'P2025') {
@@ -125,7 +219,17 @@ exports.assignWorker = async (req, res) => {
 exports.getWorkerTickets = async (req, res) => {
     try {
         const tickets = await prisma.ticket.findMany({
-            where: { workerId: req.user.userId },
+            where: {
+                assignments: { some: { workerId: req.user.userId } }
+            },
+            include: {
+                ticketPhotos: true,
+                assignments: {
+                    include: {
+                        worker: { select: { id: true, name: true } }
+                    }
+                }
+            },
             orderBy: { createdAt: 'desc' }
         });
         res.status(200).json(tickets);
@@ -139,7 +243,7 @@ exports.getWorkerTickets = async (req, res) => {
 exports.updateStatus = async (req, res) => {
     try {
         const { ticketId } = req.params;
-        const { status, note } = req.body;
+        const { status, note, totalAmount, amountReceived, paymentMode, paymentNote } = req.body;
 
         const allowedStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED'];
         if (!allowedStatuses.includes(status)) {
@@ -153,52 +257,89 @@ exports.updateStatus = async (req, res) => {
 
         const currentTicket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            include: { worker: { select: { name: true } } }
+            include: { assignments: true }
         });
 
         if (!currentTicket) {
             return res.status(404).json({ error: "Ticket not found" });
         }
-        if (currentTicket.workerId !== req.user.userId) {
+
+        const isAssigned = currentTicket.assignments.some(a => a.workerId === req.user.userId);
+        if (!isAssigned) {
             return res.status(403).json({ error: "You are not assigned to this ticket" });
         }
 
-        // Rule 6: Status flow validation
-        // PENDING -> IN_PROGRESS
-        // IN_PROGRESS -> PENDING
-        // IN_PROGRESS -> COMPLETED
-        // PENDING -> COMPLETED
-        const currentStatus = currentTicket.status;
-        const isValidTransition =
-            (currentStatus === 'PENDING' && (status === 'IN_PROGRESS' || status === 'COMPLETED')) ||
-            (currentStatus === 'IN_PROGRESS' && (status === 'PENDING' || status === 'COMPLETED')) ||
-            (currentStatus === 'COMPLETED' && false); // No transitions away from COMPLETED in this simple rule set
-
-        if (currentStatus !== status && !isValidTransition) {
-            // If worker re-submits same status, we'll allow it (idempotent) or block if strict
-            // For now, let's just ensure we don't break simple workflows.
-        }
+        // Rule 6: Status flow validation omitted for brevity or handled by frontend
 
         const updateData = { status };
         if (status === 'PENDING') {
             updateData.pendingNote = note;
         }
 
+        if (status === 'COMPLETED') {
+            // PART 2: Mandatory Photos Check
+            const photos = await prisma.ticketPhoto.findMany({
+                where: { ticketId }
+            });
+
+            const hasBefore = photos.some(p => p.type === 'BEFORE');
+            const hasAfter = photos.some(p => p.type === 'AFTER');
+
+            if (!hasBefore || !hasAfter) {
+                return res.status(400).json({ error: "Before and After photos are mandatory before completion." });
+            }
+
+            const tot = parseFloat(totalAmount || "0");
+            const rec = parseFloat(amountReceived || "0");
+            let pStatus = "PENDING";
+            if (tot > 0 && rec >= tot) pStatus = "FULL";
+            else if (rec > 0 && rec < tot) pStatus = "PARTIAL";
+
+            updateData.totalAmount = tot;
+            updateData.amountReceived = rec;
+            updateData.paymentStatus = pStatus;
+            updateData.paymentMode = paymentMode;
+            updateData.paymentNote = paymentNote;
+            updateData.reviewRequested = true;
+
+            // Create payment history record if there's a payment
+            if (rec > 0) {
+                await prisma.paymentHistory.create({
+                    data: {
+                        ticketId,
+                        amount: rec,
+                        paymentMode: paymentMode || 'CASH',
+                        addedBy: 'WORKER'
+                    }
+                });
+            }
+        }
+
         const updatedTicket = await prisma.ticket.update({
             where: { id: ticketId },
-            data: updateData,
-            include: { worker: { select: { name: true } } }
+            data: updateData
         });
 
         // Handle Notifications
         if (status === 'COMPLETED') {
-            await prisma.ticket.update({
-                where: { id: ticketId },
-                data: { reviewRequested: true }
-            });
             notifications.onTicketCompleted(updatedTicket).catch(err => {
                 console.error("[Notification Error] onTicketCompleted:", err.message);
             });
+            // Auto-generate invoice
+            invoiceService.createInvoice(ticketId).catch(err => {
+                console.error("[Invoice Error] createInvoice:", err.message);
+            });
+
+            // Customer Notification - Job Completed
+            if (updatedTicket.telegramId) {
+                const customerMsg = `🎉 <b>Job Completed!</b>\n\n` +
+                    `Thank you for choosing Hi-Tech Connect.\n` +
+                    `The work for "<b>${updatedTicket.title}</b>" has been finished.\n\n` +
+                    `⭐ <b>We value your feedback!</b>\n` +
+                    `Please share your experience here: https://hitech-connect.in/reviews\n\n` +
+                    `Stay secure! 🛡️`;
+                telegramService.sendTelegramMessage(updatedTicket.telegramId, customerMsg).catch(() => { });
+            }
         } else if (status === 'PENDING') {
             notifications.onTicketPending(updatedTicket, note).catch(err => {
                 console.error("[Notification Error] onTicketPending:", err.message);
@@ -220,7 +361,9 @@ exports.getTicketHistory = async (req, res) => {
         const ticket = await prisma.ticket.findUnique({
             where: { id },
             include: {
-                worker: { select: { id: true, name: true } }
+                assignments: {
+                    include: { worker: { select: { id: true, name: true } } }
+                }
             }
         });
 
@@ -239,13 +382,14 @@ exports.getTicketHistory = async (req, res) => {
             }
         ];
 
-        if (ticket.workerId) {
+        const primaryAssign = ticket.assignments.find(a => a.isPrimary) || ticket.assignments[0];
+        if (primaryAssign) {
             timeline.push({
                 event: 'ASSIGNED',
                 label: 'Worker Assigned',
                 timestamp: ticket.updatedAt,
                 status: 'IN_PROGRESS',
-                actor: ticket.worker?.name || 'Unknown Worker',
+                actor: primaryAssign.worker?.name || 'Unknown Worker',
             });
         }
 
@@ -255,7 +399,7 @@ exports.getTicketHistory = async (req, res) => {
                 label: 'Work Completed',
                 timestamp: ticket.updatedAt,
                 status: 'COMPLETED',
-                actor: ticket.worker?.name || 'Unknown Worker',
+                actor: primaryAssign?.worker?.name || 'Unknown Worker',
             });
         }
 
@@ -280,29 +424,283 @@ exports.getTicketHistory = async (req, res) => {
 exports.adminUpdateStatus = async (req, res) => {
     try {
         const { ticketId } = req.params;
-        const { status } = req.body;
+        const { status, amount, paymentMode, workSummary, warrantyStartDate, warrantyExpiryDate, amcEnabled, amcRenewalDate } = req.body;
 
         if (!['PENDING', 'IN_PROGRESS', 'COMPLETED'].includes(status)) {
             return res.status(400).json({ error: "Invalid status" });
         }
 
+        const updateData = { status };
+        if (status === 'COMPLETED') {
+            const amt = parseFloat(amount || "0");
+            updateData.amountReceived = amt;
+            updateData.totalAmount = amt; // Assuming admin complete means full payment
+            updateData.paymentStatus = "FULL";
+            updateData.paymentMode = paymentMode;
+            updateData.workSummary = workSummary;
+            updateData.reviewRequested = true;
+
+            // Upgrade Phases (Warranty & AMC)
+            if (warrantyStartDate) updateData.warrantyStartDate = new Date(warrantyStartDate);
+            if (warrantyExpiryDate) updateData.warrantyExpiryDate = new Date(warrantyExpiryDate);
+            if (amcEnabled !== undefined) updateData.amcEnabled = amcEnabled;
+            if (amcRenewalDate) updateData.amcRenewalDate = new Date(amcRenewalDate);
+
+            // Create payment history record
+            if (amt > 0) {
+                await prisma.paymentHistory.create({
+                    data: {
+                        ticketId,
+                        amount: amt,
+                        paymentMode: paymentMode || 'CASH',
+                        addedBy: 'ADMIN'
+                    }
+                });
+            }
+        }
+
         const updatedTicket = await prisma.ticket.update({
             where: { id: ticketId },
-            data: { status },
-            include: { worker: { select: { id: true, name: true } } }
+            data: updateData,
+            include: {
+                assignments: {
+                    include: { worker: { select: { id: true, name: true } } }
+                }
+            }
         });
 
         if (status === 'COMPLETED') {
-            await prisma.ticket.update({
-                where: { id: ticketId },
-                data: { reviewRequested: true }
-            });
             notifications.onTicketCompleted(updatedTicket).catch(() => { });
+            // Auto-generate invoice
+            invoiceService.createInvoice(ticketId).catch(err => {
+                console.error("[Invoice Error] createInvoice:", err.message);
+            });
         }
 
         res.status(200).json(updatedTicket);
     } catch (error) {
         console.error("Admin update status error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// 8. Admin: Add Settlement Payment
+exports.addPayment = async (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        const { amount, paymentMode } = req.body;
+
+        const amt = parseFloat(amount);
+        if (isNaN(amt) || amt <= 0) {
+            return res.status(400).json({ error: "Invalid payment amount" });
+        }
+
+        const ticket = await prisma.ticket.findUnique({
+            where: { id: ticketId },
+            include: { payments: true }
+        });
+
+        if (!ticket) {
+            return res.status(404).json({ error: "Ticket not found" });
+        }
+
+        const currentTotalReceived = (ticket.amountReceived || 0);
+        const newTotalReceived = currentTotalReceived + amt;
+        const totalAmount = (ticket.totalAmount || 0);
+
+        if (totalAmount > 0 && newTotalReceived > totalAmount + 1) { // small buffer for float
+            return res.status(400).json({ error: `Amount exceeds balance. Remaining: ₹${totalAmount - currentTotalReceived}` });
+        }
+
+        let pStatus = ticket.paymentStatus;
+        if (totalAmount > 0) {
+            if (newTotalReceived >= totalAmount) pStatus = "FULL";
+            else pStatus = "PARTIAL";
+        }
+
+        // 1. Create history record
+        await prisma.paymentHistory.create({
+            data: {
+                ticketId,
+                amount: amt,
+                paymentMode: paymentMode || 'CASH',
+                addedBy: 'ADMIN'
+            }
+        });
+
+        // 2. Update ticket
+        const updatedTicket = await prisma.ticket.update({
+            where: { id: ticketId },
+            data: {
+                amountReceived: newTotalReceived,
+                paymentStatus: pStatus
+            },
+            include: {
+                assignments: {
+                    include: { worker: { select: { id: true, name: true } } }
+                },
+                payments: { orderBy: { createdAt: 'desc' } }
+            }
+        });
+
+        res.status(200).json(updatedTicket);
+    } catch (error) {
+        console.error("Add payment error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Update Ticket Progress Step (Phase 3)
+ * PATCH /api/tickets/:id/progress
+ */
+exports.updateProgress = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { progress } = req.body;
+        const userId = req.user.userId;
+
+        const ticket = await prisma.ticket.findUnique({ where: { id } });
+
+        if (!ticket) {
+            return res.status(404).json({ error: "Ticket not found" });
+        }
+
+        const isAssigned = await prisma.ticketAssignment.findFirst({
+            where: { ticketId: id, workerId: userId }
+        });
+
+        if (!isAssigned) {
+            return res.status(403).json({ error: "Not authorized to update this ticket" });
+        }
+
+        const updatedTicket = await prisma.ticket.update({
+            where: { id },
+            data: { ticketProgress: progress }
+        });
+
+        res.status(200).json(updatedTicket);
+    } catch (error) {
+        console.error("Update progress error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get Client Tickets (Phase 3)
+ * GET /api/tickets/my-tickets
+ */
+exports.getClientTickets = async (req, res) => {
+    try {
+        const userEmail = req.user.email;
+        // Find tickets matching user's email or potentially phone
+        const tickets = await prisma.ticket.findMany({
+            where: {
+                OR: [
+                    { clientEmail: userEmail },
+                    { clientName: { equals: req.user.name, mode: 'insensitive' } } // Fallback
+                ]
+            },
+            include: {
+                assignments: {
+                    include: { worker: { select: { name: true, phone: true } } }
+                },
+                invoice: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.status(200).json(tickets);
+    } catch (error) {
+        console.error("Get client tickets error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Upload Ticket Photo (Phase 4)
+ * POST /api/tickets/:id/photos
+ */
+exports.uploadTicketPhoto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ error: "No image file provided" });
+        }
+
+        // Relative path for storage, frontend will use /uploads prefix
+        const imageUrl = `/uploads/tickets/${req.file.filename}`;
+
+        const photo = await prisma.ticketPhoto.create({
+            data: {
+                ticketId: id,
+                type,
+                imageUrl,
+                uploadedBy: req.user.role === 'ADMIN' ? 'Admin' : 'Worker'
+            }
+        });
+
+        res.status(201).json(photo);
+    } catch (error) {
+        console.error("Upload photo error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get Ticket Photos (Phase 4)
+ * GET /api/tickets/:id/photos
+ */
+exports.getTicketPhotos = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const photos = await prisma.ticketPhoto.findMany({
+            where: { ticketId: id },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.status(200).json(photos);
+    } catch (error) {
+        console.error("Get photos error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Admin: Delete Ticket
+ * DELETE /api/admin/tickets/:id
+ */
+exports.deleteTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Check if ticket exists
+        const ticket = await prisma.ticket.findUnique({
+            where: { id }
+        });
+
+        if (!ticket) {
+            return res.status(404).json({ error: "Ticket not found" });
+        }
+
+        // Deletion in transaction to ensure integrity
+        // Order matters for some FK constraints, though deleteMany handles multiple
+        await prisma.$transaction([
+            prisma.review.deleteMany({ where: { ticketId: id } }),
+            prisma.invoice.deleteMany({ where: { ticketId: id } }),
+            prisma.ticketAssignment.deleteMany({ where: { ticketId: id } }),
+            prisma.ticketPhoto.deleteMany({ where: { ticketId: id } }),
+            prisma.paymentHistory.deleteMany({ where: { ticketId: id } }),
+            prisma.internalNotification.deleteMany({ where: { ticketId: id } }),
+            prisma.ticket.delete({ where: { id } })
+        ]);
+
+        console.log(`[Admin] Ticket ${id} deleted by ${req.user.email}`);
+
+        res.status(200).json({ message: "Ticket and all related records deleted successfully" });
+    } catch (error) {
+        console.error("Delete ticket error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

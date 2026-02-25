@@ -9,8 +9,8 @@ const Footer = () => {
           {/* Company Info */}
           <div className="space-y-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-accent">
-                <Shield className="h-6 w-6 text-white" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-md overflow-hidden border border-white/10 shadow-lg bg-white p-1">
+                <img src="/logo.svg" alt="Hi-Tech Logo" className="w-full h-full object-contain" />
               </div>
               <span className="text-xl font-bold tracking-tight">Hi Tech Communication Systems</span>
             </div>
@@ -26,11 +26,11 @@ const Footer = () => {
             <ul className="space-y-4">
               <li className="flex items-start gap-3 text-gray-400 hover:text-white transition-colors">
                 <MapPin className="h-5 w-5 text-accent shrink-0 mt-0.5" />
-                <span className="text-sm">Nellore Bazar, Nellore, Andhra Pradesh - 524001</span>
+                <span className="text-sm">Shop no F-18, 1st floor, KAC Plaza, R R street, Nellore-524001</span>
               </li>
               <li className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
                 <Phone className="h-5 w-5 text-accent shrink-0" />
-                <span className="text-sm">07383872542</span>
+                <span className="text-sm">9885680280</span>
               </li>
               <li className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors">
                 <Mail className="h-5 w-5 text-accent shrink-0" />
@@ -45,10 +45,11 @@ const Footer = () => {
             <ul className="space-y-3">
               {[
                 { label: "Home", path: "/" },
-                { label: "About", path: "/" },
+                { label: "About Us", path: "/about" },
                 { label: "Our Works", path: "/our-works" },
-                { label: "Reviews", path: "/reviews" },
-                { label: "Contact", path: "/" },
+                { label: "Certifications", path: "/certifications" },
+                { label: "GST Details", path: "/gst-info" },
+                { label: "Contact", path: "/contact" },
               ].map((link) => (
                 <li key={link.label}>
                   <Link to={link.path} className="text-sm text-gray-400 hover:text-accent transition-colors">

@@ -23,6 +23,14 @@ enum TicketStatus {
   COMPLETED
 }
 
+enum TicketProgress {
+  REQUESTED
+  ASSIGNED
+  ON_THE_WAY
+  IN_PROGRESS
+  COMPLETED
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -30,9 +38,10 @@ model User {
   phone     String?
   password  String
   role      Role
+  telegramId String?
   createdAt DateTime @default(now())
 
-  ticketsAssigned Ticket[]
+  assignments     TicketAssignment[]
   notifications   Notification[]
 }
 
@@ -49,16 +58,94 @@ model Ticket {
   clientName  String
   clientPhone String
   clientEmail String?
+  telegramId  String?
 
-  workerId    String?
-  worker      User?        @relation(fields: [workerId], references: [id])
+  assignments TicketAssignment[]
 
   pendingNote String?
   reviewRequested Boolean @default(false)
   review          Review?
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  // Payment & Work Completion Details
+  totalAmount    Float?
+  amountReceived Float?
+  paymentStatus  String? // FULL, PARTIAL, PENDING
+  paymentMode    String? // CASH, UPI, BANK
+  paymentNote    String?
+  workSummary    String?
+
+  // Upgrade Phases
+  ticketProgress  TicketProgress? @default(REQUESTED)
+  warrantyStartDate DateTime?
+  warrantyExpiryDate DateTime?
+  amcEnabled        Boolean         @default(false)
+  amcRenewalDate    DateTime?
+
+  invoice     Invoice?
+  ticketPhotos TicketPhoto[]
+  payments    PaymentHistory[]
+  internalNotifications InternalNotification[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model TicketAssignment {
+  id         String   @id @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  workerId   String
+  worker     User     @relation(fields: [workerId], references: [id])
+  isPrimary  Boolean  @default(false)
+  assignedAt DateTime @default(now())
+
+  @@unique([ticketId, workerId])
+}
+
+model Invoice {
+  id             String   @id @default(uuid())
+  invoiceNumber  String   @unique // format: HTC-YYYY-0001
+  ticketId       String   @unique
+  ticket         Ticket   @relation(fields: [ticketId], references: [id])
+  customerName   String
+  customerPhone  String
+  totalAmount    Float
+  amountReceived Float
+  balance        Float
+  gstNumber      String?
+  companyAddress String?
+  paymentStatus  String
+  createdAt      DateTime @default(now())
+}
+
+model TicketPhoto {
+  id         String   @id @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id])
+  type       String   // BEFORE, AFTER
+  imageUrl   String
+  uploadedBy String
+  createdAt  DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  title       String
+  amount      Float
+  category    String   // SALARY, MATERIAL, OFFICE, OTHER
+  date        DateTime @default(now())
+  notes       String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+}
+
+model PaymentHistory {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id])
+  amount      Float
+  paymentMode String   // CASH, UPI, BANK
+  addedBy     Role     // ADMIN, WORKER
+  createdAt   DateTime @default(now())
 }
 
 model Notification {
@@ -85,4 +172,20 @@ model WorkPhoto {
   title     String
   imageUrl  String
   createdAt DateTime @default(now())
+}
+
+model InternalNotification {
+  id         String   @id @default(uuid())
+  type       String   // PAYMENT, WARRANTY, AMC, OTHER
+  message    String
+  ticketId   String?
+  customerId String?
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  // Optional: Relations if needed
+  ticket     Ticket?  @relation(fields: [ticketId], references: [id])
+
+  @@index([isRead])
+  @@index([createdAt])
 }

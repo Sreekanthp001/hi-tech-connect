@@ -79,8 +79,8 @@ const Header = () => {
               className="flex items-center gap-3 focus-visible:outline-none"
               aria-label="Hi Tech Communication Systems — home"
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary">
-                <Shield className="h-6 w-6 text-white" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md overflow-hidden border border-gray-100 shadow-sm">
+                <img src="/logo.svg" alt="Hi-Tech Connect Logo" className="w-full h-full object-contain" />
               </div>
               <div className="flex flex-col text-left leading-tight">
                 <span className="text-lg font-bold tracking-tight text-primary">

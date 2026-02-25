@@ -104,6 +104,22 @@ const TicketForm = () => {
                                         Your ticket has been officially registered. One of our field engineers
                                         will contact you at <strong>{form.clientPhone || "your primary number"}</strong>.
                                     </p>
+
+                                    <div className="mt-8 p-6 bg-primary/5 rounded-2xl border border-primary/10 max-w-md w-full">
+                                        <h4 className="text-xl font-bold text-primary mb-2">Get Live Updates on Telegram</h4>
+                                        <p className="text-sm text-gray-600 mb-6">
+                                            For instant booking, assignment, and completion updates, start our Telegram bot.
+                                        </p>
+                                        <a
+                                            href="https://t.me/HiTech_Worker_alert_bot"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center justify-center w-full h-12 px-6 font-bold text-white bg-primary rounded-xl hover:bg-primary/90 transition-colors shadow-lg"
+                                        >
+                                            Start Telegram Bot
+                                        </a>
+                                    </div>
+
                                     <Button variant="outline" onClick={() => setSubmitted(false)} className="mt-4 ring-2 ring-gray-100 font-bold px-8">Log Another Request</Button>
                                 </div>
                             ) : (
