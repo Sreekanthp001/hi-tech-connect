@@ -22,7 +22,6 @@ const sendTelegramMessage = async (chatId, message) => {
             text: message,
             parse_mode: 'HTML'
         });
-        console.log(`[Telegram Service] Message sent successfully to ${chatId}`);
     } catch (error) {
         console.error('[Telegram Service] Error sending message:', error.response?.data || error.message);
         // Fail silently to avoid blocking the main application flow

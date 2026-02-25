@@ -32,7 +32,6 @@ exports.handleWebhook = async (req, res) => {
                     where: { id: recentTicket.id },
                     data: { telegramId: chatId }
                 });
-                console.log(`[Telegram Webhook] Linked chatId ${chatId} to ticket ${recentTicket.id}`);
 
                 // Send confirmation back to the customer
                 const confirmMsg =

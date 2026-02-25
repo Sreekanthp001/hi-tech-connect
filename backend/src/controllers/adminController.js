@@ -567,14 +567,19 @@ exports.getRevenueStats = async (req, res) => {
             topWorker = worker ? worker.name : "N/A";
         }
 
-        // 4. Repeat Customer Percentage
         const totalCustomers = await prisma.ticket.groupBy({
-            by: ['clientPhone']
+            by: ['clientPhone'],
+            _count: { _all: true }
         });
 
         const repeatCustomers = await prisma.ticket.groupBy({
             by: ['clientPhone'],
-            having: { clientPhone: { _count: { gt: 1 } } }
+            _count: { _all: true },
+            having: {
+                clientPhone: {
+                    _count: { gt: 1 }
+                }
+            }
         });
 
         const repeatCustomerPercentage = totalCustomers.length > 0

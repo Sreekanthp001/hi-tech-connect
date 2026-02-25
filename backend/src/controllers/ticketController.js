@@ -749,8 +749,6 @@ exports.deleteTicket = async (req, res) => {
             prisma.ticket.delete({ where: { id } })
         ]);
 
-        console.log(`[Admin] Ticket ${id} deleted by ${req.user.email}`);
-
         res.status(200).json({ message: "Ticket and all related records deleted successfully" });
     } catch (error) {
         console.error("Delete ticket error:", error);

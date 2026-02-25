@@ -1,6 +1,5 @@
 const cron = require('node-cron');
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require('../config/prisma');
 
 /**
  * Daily Cron Job at 00:00 (Midnight)
@@ -12,7 +11,6 @@ const prisma = new PrismaClient();
 const initCronJobs = () => {
     // Run every day at midnight
     cron.schedule('0 0 * * *', async () => {
-        console.log('Running daily reminder cron job...');
         await checkPendingPayments();
         await checkWarrantyExpiries();
         await checkAMCRenewals();
@@ -21,7 +19,6 @@ const initCronJobs = () => {
     // Also run once on startup in development to verify
     if (process.env.NODE_ENV === 'development') {
         process.nextTick(async () => {
-            console.log('Running startup reminder check...');
             await checkPendingPayments();
             await checkWarrantyExpiries();
             await checkAMCRenewals();
@@ -39,8 +36,7 @@ const checkPendingPayments = async () => {
                 status: 'COMPLETED',
                 paymentStatus: { in: ['PENDING', 'PARTIAL'] },
                 updatedAt: { lte: sevenDaysAgo }
-            },
-            include: { customer: true }
+            }
         });
 
         for (const ticket of pendingTickets) {
@@ -56,8 +52,7 @@ const checkPendingPayments = async () => {
                     data: {
                         type: 'PAYMENT',
                         message,
-                        ticketId: ticket.id,
-                        customerId: ticket.customerId
+                        ticketId: ticket.id
                     }
                 });
             }
@@ -94,8 +89,7 @@ const checkWarrantyExpiries = async () => {
                     data: {
                         type: 'WARRANTY',
                         message,
-                        ticketId: ticket.id,
-                        customerId: ticket.customerId
+                        ticketId: ticket.id
                     }
                 });
             }
@@ -133,8 +127,7 @@ const checkAMCRenewals = async () => {
                     data: {
                         type: 'AMC',
                         message,
-                        ticketId: ticket.id,
-                        customerId: ticket.customerId
+                        ticketId: ticket.id
                     }
                 });
             }
