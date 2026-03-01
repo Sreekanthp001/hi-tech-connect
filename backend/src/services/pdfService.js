@@ -1,102 +1,98 @@
 const PDFDocument = require('pdfkit');
+const fs = require('fs');
+const path = require('path');
 
-/**
- * Generate Invoice PDF
- * @param {Object} data - Invoice, Ticket, and Customer data
- * @returns {Promise<Buffer>}
- */
-const generateInvoicePDF = (data) => {
-    return new Promise((resolve, reject) => {
+class PdfService {
+    async generateQuotation(quotation, res) {
         const doc = new PDFDocument({ margin: 50 });
-        let buffers = [];
-        doc.on('data', buffers.push.bind(buffers));
-        doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-        const { invoice, ticket } = data;
+        // Stream the PDF to the response
+        doc.pipe(res);
 
-        // ─── Header ────────────────────────────────────────────────────────────
-        // Drawing a blue circle placeholder for logo
-        doc.circle(80, 75, 25).fill("#3B82F6");
-        doc.fillColor("#FFFFFF").fontSize(18).font("Helvetica-Bold").text("H", 73, 68);
-        doc.fillColor("#FFFFFF").fontSize(8).text("HI-TECH", 63, 85);
+        // Header
+        doc.fillColor('#0056b3').fontSize(24).text('Hi-Tech Connect', { align: 'left' });
+        doc.fillColor('#333').fontSize(10).text('Security Solutions & CCTV Surveillance', { align: 'left' });
+        doc.text('Contact: +91 98765 43210 | info@hitechconnect.com', { align: 'left' });
 
-        doc.fillColor("#000000")
-            .fontSize(20)
-            .font("Helvetica-Bold")
-            .text("HI-TECH COMMUNICATION SYSTEMS", 120, 55);
+        doc.moveUp(3);
+        doc.fillColor('#555').fontSize(18).text('QUOTATION', { align: 'right' });
+        doc.fontSize(10).text(`No: ${quotation.quotationNo}`, { align: 'right' });
+        doc.text(`Date: ${new Date(quotation.createdAt).toLocaleDateString()}`, { align: 'right' });
 
-        doc.fontSize(10)
-            .font("Helvetica")
-            .text("Security Solutions & Services", 120, 80)
-            .text("Shop no F-18, 1st floor, KAC Plaza", 120, 95)
-            .text("R R street, Nellore-524001", 120, 110)
-            .text("Phone: 9885680280", 120, 125);
+        doc.moveDown(2);
+        doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#0056b3').stroke();
+        doc.moveDown(1.5);
 
-        doc.moveTo(50, 150).lineTo(550, 150).stroke();
+        // Customer & Requirements
+        const startY = doc.y;
+        doc.fillColor('#000').fontSize(12).text('Bill To:', 50, startY, { underline: true });
+        doc.fontSize(10).text(quotation.customerName, 50, doc.y + 5);
+        doc.text(`Phone: ${quotation.customerPhone}`);
 
-        // ─── Invoice Title & Info ───────────────────────────────────────────────
-        doc.fillColor("#000000")
-            .fontSize(24)
-            .font("Helvetica-Bold")
-            .text("INVOICE", 50, 170, { align: "right" });
+        doc.fontSize(12).text('System Requirements:', 300, startY, { underline: true });
+        doc.fontSize(10).text(`Cameras: ${quotation.cameraCount} (${quotation.cameraType})`, 300, doc.y + 5);
+        doc.text(`Est. Wire: ${quotation.wireLength} Meters`);
 
-        doc.fontSize(10)
-            .font("Helvetica")
-            .text(`Invoice #: ${invoice.invoiceNumber}`, 50, 200, { align: "right" })
-            .text(`Date: ${new Date(invoice.createdAt).toLocaleDateString('en-IN')}`, 50, 215, { align: "right" })
-            .text(`Ticket ID: ${ticket.id.slice(0, 8).toUpperCase()}`, 50, 230, { align: "right" });
+        doc.moveDown(3);
 
-        // ─── Customer Info ──────────────────────────────────────────────────────
-        doc.fontSize(12).font("Helvetica-Bold").text("BILL TO:", 50, 170);
-        doc.fontSize(11).font("Helvetica-Bold").fillColor("#3B82F6").text(invoice.customerName, 50, 190);
-        doc.fontSize(10).font("Helvetica").fillColor("#000000")
-            .text(`Phone: ${invoice.customerPhone}`, 50, 210)
-            .text("Address:", 50, 225)
-            .text(ticket.address, 50, 240, { width: 250 });
+        // Table Header
+        const tableTop = doc.y;
+        doc.fillColor('#f8f9fa').rect(50, tableTop, 500, 20).fill();
+        doc.fillColor('#333').fontSize(10);
+        doc.text('#', 60, tableTop + 5);
+        doc.text('Item Description', 100, tableTop + 5);
+        doc.text('Qty', 350, tableTop + 5, { width: 50, align: 'center' });
+        doc.text('Unit Price', 400, tableTop + 5, { width: 70, align: 'right' });
+        doc.text('Total', 480, tableTop + 5, { width: 70, align: 'right' });
 
-        // ─── Table Header ──────────────────────────────────────────────────────
-        const tableTop = 320;
-        doc.rect(50, tableTop, 500, 25).fill("#F1F5F9");
-        doc.fillColor("#0F172A").font("Helvetica-Bold").fontSize(10);
-        doc.text("Description", 60, tableTop + 8);
-        doc.text("Technician", 280, tableTop + 8);
-        doc.text("Amount (INR)", 450, tableTop + 8, { align: "right" });
+        doc.moveDown(0.5);
+        let currentY = tableTop + 25;
 
-        // ─── Table Row ─────────────────────────────────────────────────────────
-        const rowTop = tableTop + 35;
-        doc.font("Helvetica").fillColor("#000000");
-        doc.text(ticket.title, 60, rowTop, { width: 210 });
-        const primaryAssigned = ticket.assignments?.find(a => a.isPrimary);
-        const technicianName = primaryAssigned?.worker?.name || ticket.assignments?.[0]?.worker?.name || "Assigned Tech";
-        doc.text(technicianName, 280, rowTop);
-        doc.text(invoice.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 450, rowTop, { align: "right" });
+        // Table Items
+        quotation.items.forEach((item, index) => {
+            doc.text(index + 1, 60, currentY);
+            doc.text(item.name, 100, currentY, { width: 240 });
+            doc.text(item.quantity, 350, currentY, { width: 50, align: 'center' });
+            doc.text(item.unitPrice.toFixed(2), 400, currentY, { width: 70, align: 'right' });
+            doc.text(item.totalPrice.toFixed(2), 480, currentY, { width: 70, align: 'right' });
 
-        // ─── Summary ───────────────────────────────────────────────────────────
-        const summaryTop = rowTop + 80;
-        doc.moveTo(300, summaryTop).lineTo(550, summaryTop).stroke();
+            currentY += 20;
+            doc.moveTo(50, currentY - 5).lineTo(550, currentY - 5).strokeColor('#eee').lineWidth(0.5).stroke();
+        });
 
-        doc.fontSize(10).font("Helvetica");
-        doc.text("Subtotal:", 350, summaryTop + 15);
-        doc.text(invoice.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 450, summaryTop + 15, { align: "right" });
+        doc.moveDown(2);
 
-        doc.text("Amount Received:", 350, summaryTop + 35);
-        doc.text(invoice.amountReceived.toLocaleString('en-IN', { minimumFractionDigits: 2 }), 450, summaryTop + 35, { align: "right" });
+        // Totals
+        const totalsY = currentY + 20;
+        doc.fontSize(10);
+        doc.text('Subtotal:', 350, totalsY, { width: 100, align: 'right' });
+        doc.text(quotation.subtotal.toFixed(2), 480, totalsY, { width: 70, align: 'right' });
 
-        doc.rect(340, summaryTop + 55, 210, 30).fill("#F1F5F9");
-        doc.fillColor("#EF4444").font("Helvetica-Bold").fontSize(12);
-        doc.text("BALANCE DUE:", 350, summaryTop + 65);
-        doc.text(`INR ${invoice.balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, 450, summaryTop + 65, { align: "right" });
+        if (quotation.discount > 0) {
+            doc.text('Discount:', 350, totalsY + 15, { width: 100, align: 'right' });
+            doc.text(`-${quotation.discount.toFixed(2)}`, 480, totalsY + 15, { width: 70, align: 'right' });
+        }
 
-        // ─── Footer ────────────────────────────────────────────────────────────
-        doc.fillColor("#64748B")
-            .fontSize(9)
-            .font("Helvetica-Oblique")
-            .text("Thank you for your business! For any queries, call us at 9885680280.", 50, 720, { align: "center", width: 500 });
+        doc.text('GST (18%):', 350, totalsY + 30, { width: 100, align: 'right' });
+        doc.text(quotation.gstAmount.toFixed(2), 480, totalsY + 30, { width: 70, align: 'right' });
 
-        doc.text("Generated on " + new Date().toLocaleString(), 50, 740, { align: "center", width: 500 });
+        doc.fillColor('#0056b3').fontSize(14).text('Grand Total:', 350, totalsY + 50, { width: 100, align: 'right' });
+        doc.text(`Rs. ${quotation.grandTotal.toFixed(2)}`, 450, totalsY + 50, { width: 100, align: 'right', fontStyle: 'bold' });
+
+        // Notes
+        if (quotation.notes) {
+            doc.moveDown(4);
+            doc.fillColor('#333').fontSize(12).text('Notes:', 50, doc.y, { underline: true });
+            doc.fontSize(10).text(quotation.notes, 50, doc.y + 5);
+        }
+
+        // Footer
+        const footerY = 700;
+        doc.fontSize(8).fillColor('#777').text('This is a computer-generated quotation and does not require a physical signature.', 50, footerY, { align: 'center' });
+        doc.text('Validity: 7 Days | Payment: 50% Advance, 50% on Completion', { align: 'center' });
 
         doc.end();
-    });
-};
+    }
+}
 
-module.exports = { generateInvoicePDF };
+module.exports = new PdfService();

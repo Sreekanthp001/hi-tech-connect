@@ -48,6 +48,12 @@ model User {
   assignments     TicketAssignment[]
   notifications   Notification[]
   ticketPhotos    TicketPhoto[]
+  stockTransactions StockTransaction[]
+
+  // Lead and Installation Relations
+  assignedLeads         Lead[]                  @relation("LeadTechnician")
+  seniorInstallations   InstallationAssignment[] @relation("InstallationSrTech")
+  supportInstallations  InstallationAssignment[] @relation("InstallationSupport")
 }
 
 model Ticket {
@@ -90,6 +96,7 @@ model Ticket {
   ticketPhotos TicketPhoto[]
   payments    PaymentHistory[]
   internalNotifications InternalNotification[]
+  stockTransactions StockTransaction[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 }
@@ -214,4 +221,160 @@ model WorkerAdvance {
   amount    Float
   reason    String?
   createdAt DateTime @default(now())
+}
+
+model ProductMaster {
+  id          String   @id @default(uuid())
+  name        String
+  category    String
+  brand       String?
+  type        String?
+  purchasePrice Float?
+  sellingPrice  Float
+  unitType    String   // piece, meter, per_camera
+  gstPercent  Float    @default(18)
+  minimumStockAlert Int @default(5)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       QuotationItem[]
+  transactions StockTransaction[]
+}
+
+enum TransactionType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum ReferenceType {
+  PURCHASE
+  WORKER_ISSUE
+  RETURN
+  MANUAL_ADJUSTMENT
+}
+
+model StockTransaction {
+  id              String          @id @default(uuid())
+  productId       String
+  product         ProductMaster   @relation(fields: [productId], references: [id])
+  transactionType TransactionType
+  quantity        Float
+  referenceType   ReferenceType
+  workerId        String?
+  worker          User?           @relation(fields: [workerId], references: [id])
+  customerId      String?         // Optional customer reference
+  ticketId        String?
+  ticket          Ticket?         @relation(fields: [ticketId], references: [id])
+  createdByAdmin  Boolean         @default(true)
+  notes           String?
+  createdAt       DateTime        @default(now())
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  APPROVED
+  CANCELLED
+}
+
+model Quotation {
+  id            String          @id @default(uuid())
+  quotationNo   String          @unique // e.g., QTN-2024-001
+  
+  leadId        String?
+  lead          Lead?           @relation(fields: [leadId], references: [id])
+
+  customerName  String
+  customerPhone String
+  cameraCount   Int
+  cameraType    String
+  wireLength    Float
+  notes         String?
+  subtotal      Float
+  discount      Float           @default(0)
+  discountType  String?         // FLAT, PERCENTAGE
+  gstAmount     Float
+  grandTotal    Float
+  status        QuotationStatus @default(DRAFT)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  items         QuotationItem[]
+}
+
+model QuotationItem {
+  id          String   @id @default(uuid())
+  quotationId String
+  quotation   Quotation @relation(fields: [quotationId], references: [id])
+  productId   String?
+  product     ProductMaster? @relation(fields: [productId], references: [id])
+  name        String
+  quantity    Int
+  unitPrice   Float    // Stored separately for historical accuracy
+  totalPrice  Float
+  createdAt   DateTime @default(now())
+}
+
+enum LeadStatus {
+  NEW_LEAD
+  SITE_VISIT_PENDING
+  SITE_VISITED
+  QUOTATION_PREPARED
+  QUOTATION_SENT
+  FOLLOW_UP_PENDING
+  APPROVED
+  TEAM_ASSIGNED
+  INSTALLATION_IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Lead {
+  id                    String      @id @default(uuid())
+  customerName          String
+  phone                 String
+  address               String?
+  requirementSummary    String?
+  status                LeadStatus  @default(NEW_LEAD)
+  
+  assignedTechnicianId  String?
+  assignedTechnician    User?       @relation("LeadTechnician", fields: [assignedTechnicianId], references: [id])
+  
+  siteVisitDate         DateTime?
+  nextFollowUpDate      DateTime?
+  followUpCount         Int         @default(0)
+  lastFollowUpNote      String?
+  
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  quotations            Quotation[]
+  installationAssignment InstallationAssignment?
+}
+
+enum InstallationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model InstallationAssignment {
+  id                String      @id @default(uuid())
+  
+  leadId            String      @unique
+  lead              Lead        @relation(fields: [leadId], references: [id])
+  
+  srTechnicianId    String
+  srTechnician      User        @relation("InstallationSrTech", fields: [srTechnicianId], references: [id])
+  
+  supportStaffId    String?
+  supportStaff      User?       @relation("InstallationSupport", fields: [supportStaffId], references: [id])
+  
+  assignedDate      DateTime    @default(now())
+  status            InstallationStatus @default(PENDING)
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 }

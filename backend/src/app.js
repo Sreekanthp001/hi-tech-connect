@@ -13,6 +13,11 @@ const reviewRoutes = require('./routes/reviewRoutes');
 const portfolioRoutes = require('./routes/portfolioRoutes');
 const invoiceRoutes = require('./routes/invoiceRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
+const productRoutes = require('./routes/productRoutes');
+const quotationRoutes = require('./routes/quotationRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
+const leadRoutes = require('./routes/leadRoutes');
+const installationRoutes = require('./routes/installationRoutes');
 const portfolioController = require('./controllers/portfolioController');
 
 const app = express();
@@ -66,6 +71,11 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/admin/expenses', require('./routes/expenseRoutes'));
 app.use('/api/telegram', require('./routes/telegramRoutes'));
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/quotations', quotationRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/installations', installationRoutes);
 
 // Error handling middleware (optional but recommended)
 app.use((err, req, res, next) => {

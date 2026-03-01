@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotation</title>
+    <style>
+        body { font-family: 'Helvetica', 'Arial', sans-serif; color: #333; margin: 40px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 20px; }
+        .company-info h1 { color: #0056b3; margin: 0; font-size: 24px; }
+        .company-info p { margin: 2px 0; font-size: 14px; }
+        .quotation-title { text-align: right; }
+        .quotation-title h2 { margin: 0; color: #555; }
+        .details-section { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .details-box h3 { border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; font-size: 16px; }
+        .details-box p { margin: 5px 0; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+        td { border: 1px solid #ddd; padding: 10px; font-size: 14px; }
+        .totals { float: right; width: 300px; }
+        .total-row { display: flex; justify-content: space-between; padding: 5px 0; }
+        .grand-total { border-top: 2px solid #0056b3; margin-top: 10px; padding-top: 10px; font-weight: bold; font-size: 18px; color: #0056b3; }
+        .footer { margin-top: 50px; font-size: 12px; color: #777; border-top: 1px solid #eee; padding-top: 10px; text-align: center; }
+        .notes { margin-top: 30px; font-size: 14px; }
+        .notes h4 { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-info">
+            <h1>Hi-Tech Connect</h1>
+            <p>Security Solutions & CCTV Surveillance</p>
+            <p>Contact: +91 98765 43210 | info@hitechconnect.com</p>
+        </div>
+        <div class="quotation-title">
+            <h2>QUOTATION</h2>
+            <p>No: <strong>{{quotationNo}}</strong></p>
+            <p>Date: {{date}}</p>
+        </div>
+    </div>
+
+    <div class="details-section">
+        <div class="details-box">
+            <h3>Bill To:</h3>
+            <p><strong>{{customerName}}</strong></p>
+            <p>Phone: {{customerPhone}}</p>
+        </div>
+        <div class="details-box">
+            <h3>System Requirements:</h3>
+            <p>Cameras: {{cameraCount}} ({{cameraType}})</p>
+            <p>Est. Wire: {{wireLength}} Meters</p>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Item Description</th>
+                <th style="text-align: center;">Qty</th>
+                <th style="text-align: right;">Unit Price</th>
+                <th style="text-align: right;">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#items}}
+            <tr>
+                <td>{{index}}</td>
+                <td>{{name}}</td>
+                <td style="text-align: center;">{{quantity}}</td>
+                <td style="text-align: right;">{{unitPrice}}</td>
+                <td style="text-align: right;">{{totalPrice}}</td>
+            </tr>
+            {{/items}}
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <div class="total-row"><span>Subtotal:</span> <span>{{subtotal}}</span></div>
+        {{#hasDiscount}}
+        <div class="total-row"><span>Discount:</span> <span>-{{discount}}</span></div>
+        {{/hasDiscount}}
+        <div class="total-row"><span>GST (18%):</span> <span>{{gstAmount}}</span></div>
+        <div class="total-row grand-total"><span>Grand Total:</span> <span>₹{{grandTotal}}</span></div>
+    </div>
+
+    <div style="clear: both;"></div>
+
+    {{#notes}}
+    <div class="notes">
+        <h4>Notes:</h4>
+        <p>{{notes}}</p>
+    </div>
+    {{/notes}}
+
+    <div class="footer">
+        <p>This is a computer-generated quotation and does not require a physical signature.</p>
+        <p>Validity: 7 Days | Payment: 50% Advance, 50% on Completion</p>
+    </div>
+</body>
+</html>
