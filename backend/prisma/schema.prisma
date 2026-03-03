@@ -21,6 +21,14 @@ enum TicketStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
+  SUBMITTED
+  SITE_VISIT_ASSIGNED
+  SITE_VISIT_COMPLETED
+  QUOTATION_GENERATED
+  QUOTATION_SENT
+  APPROVED
+  WORK_ASSIGNED
+  WORK_COMPLETED
 }
 
 enum TicketProgress {
@@ -32,28 +40,28 @@ enum TicketProgress {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  phone     String?
-  password  String
-  role      Role
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  phone      String?
+  password   String
+  role       Role
   telegramId String?
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   designation String?
   finance     WorkerFinance?
   advances    WorkerAdvance[]
 
-  assignments     TicketAssignment[]
-  notifications   Notification[]
-  ticketPhotos    TicketPhoto[]
+  assignments       TicketAssignment[]
+  notifications     Notification[]
+  ticketPhotos      TicketPhoto[]
   stockTransactions StockTransaction[]
 
   // Lead and Installation Relations
-  assignedLeads         Lead[]                  @relation("LeadTechnician")
-  seniorInstallations   InstallationAssignment[] @relation("InstallationSrTech")
-  supportInstallations  InstallationAssignment[] @relation("InstallationSupport")
+  assignedLeads        Lead[]                   @relation("LeadTechnician")
+  seniorInstallations  InstallationAssignment[] @relation("InstallationSrTech")
+  supportInstallations InstallationAssignment[] @relation("InstallationSupport")
 }
 
 model Ticket {
@@ -73,7 +81,7 @@ model Ticket {
 
   assignments TicketAssignment[]
 
-  pendingNote String?
+  pendingNote     String?
   reviewRequested Boolean @default(false)
   review          Review?
 
@@ -85,20 +93,30 @@ model Ticket {
   paymentNote    String?
   workSummary    String?
 
-  // Upgrade Phases
-  ticketProgress  TicketProgress? @default(REQUESTED)
-  warrantyStartDate DateTime?
-  warrantyExpiryDate DateTime?
-  amcEnabled        Boolean         @default(false)
-  amcRenewalDate    DateTime?
+  // Advanced Workflow Fields
+  requestType        String? // "New Installation", "Repair / Maintenance"
+  siteVisitNotes     String?
+  quotationItems     Json?
+  quotationStatus    String?
+  assignedTechnician String?
+  assignedTeam       String?
+  beforeImages       Json?
+  afterImages        Json?
 
-  invoice     Invoice?
-  ticketPhotos TicketPhoto[]
-  payments    PaymentHistory[]
+  // Upgrade Phases
+  ticketProgress     TicketProgress? @default(REQUESTED)
+  warrantyStartDate  DateTime?
+  warrantyExpiryDate DateTime?
+  amcEnabled         Boolean         @default(false)
+  amcRenewalDate     DateTime?
+
+  invoice               Invoice?
+  ticketPhotos          TicketPhoto[]
+  payments              PaymentHistory[]
   internalNotifications InternalNotification[]
-  stockTransactions StockTransaction[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  stockTransactions     StockTransaction[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 }
 
 model TicketAssignment {
@@ -135,21 +153,21 @@ model TicketPhoto {
   ticket     Ticket   @relation(fields: [ticketId], references: [id])
   workerId   String?
   worker     User?    @relation(fields: [workerId], references: [id])
-  type       String   // BEFORE, AFTER
+  type       String // BEFORE, AFTER
   imageUrl   String
   uploadedBy String
   createdAt  DateTime @default(now())
 }
 
 model Expense {
-  id          String   @id @default(uuid())
-  title       String
-  amount      Float
-  category    String   // SALARY, MATERIAL, OFFICE, OTHER
-  date        DateTime @default(now())
-  notes       String?
-  createdBy   String?
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  title     String
+  amount    Float
+  category  String // SALARY, MATERIAL, OFFICE, OTHER
+  date      DateTime @default(now())
+  notes     String?
+  createdBy String?
+  createdAt DateTime @default(now())
 }
 
 model PaymentHistory {
@@ -157,8 +175,8 @@ model PaymentHistory {
   ticketId    String
   ticket      Ticket   @relation(fields: [ticketId], references: [id])
   amount      Float
-  paymentMode String   // CASH, UPI, BANK
-  addedBy     Role     // ADMIN, WORKER
+  paymentMode String // CASH, UPI, BANK
+  addedBy     Role // ADMIN, WORKER
   createdAt   DateTime @default(now())
 }
 
@@ -175,7 +193,7 @@ model Notification {
 model Review {
   id        String   @id @default(uuid())
   ticketId  String   @unique
-  ticket    Ticket  @relation(fields: [ticketId], references: [id])
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
   rating    Int
   comment   String?
   createdAt DateTime @default(now())
@@ -190,7 +208,7 @@ model WorkPhoto {
 
 model InternalNotification {
   id         String   @id @default(uuid())
-  type       String   // PAYMENT, WARRANTY, AMC, OTHER
+  type       String // PAYMENT, WARRANTY, AMC, OTHER
   message    String
   ticketId   String?
   customerId String?
@@ -198,20 +216,20 @@ model InternalNotification {
   createdAt  DateTime @default(now())
 
   // Optional: Relations if needed
-  ticket     Ticket?  @relation(fields: [ticketId], references: [id])
+  ticket Ticket? @relation(fields: [ticketId], references: [id])
 
   @@index([isRead])
   @@index([createdAt])
 }
 
 model WorkerFinance {
-  id          String   @id @default(uuid())
-  workerId    String   @unique
-  worker      User     @relation(fields: [workerId], references: [id])
-  baseSalary  Float?
-  totalEarned Float    @default(0)
-  totalAdvance Float   @default(0)
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  workerId     String   @unique
+  worker       User     @relation(fields: [workerId], references: [id])
+  baseSalary   Float?
+  totalEarned  Float    @default(0)
+  totalAdvance Float    @default(0)
+  updatedAt    DateTime @updatedAt
 }
 
 model WorkerAdvance {
@@ -224,21 +242,21 @@ model WorkerAdvance {
 }
 
 model ProductMaster {
-  id          String   @id @default(uuid())
-  name        String
-  category    String
-  brand       String?
-  type        String?
-  purchasePrice Float?
-  sellingPrice  Float
-  unitType    String   // piece, meter, per_camera
-  gstPercent  Float    @default(18)
-  minimumStockAlert Int @default(5)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String   @id @default(uuid())
+  name              String
+  category          String
+  brand             String?
+  type              String?
+  purchasePrice     Float?
+  sellingPrice      Float
+  unitType          String // piece, meter, per_camera
+  gstPercent        Float    @default(18)
+  minimumStockAlert Int      @default(5)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  items       QuotationItem[]
+  items        QuotationItem[]
   transactions StockTransaction[]
 }
 
@@ -264,7 +282,7 @@ model StockTransaction {
   referenceType   ReferenceType
   workerId        String?
   worker          User?           @relation(fields: [workerId], references: [id])
-  customerId      String?         // Optional customer reference
+  customerId      String? // Optional customer reference
   ticketId        String?
   ticket          Ticket?         @relation(fields: [ticketId], references: [id])
   createdByAdmin  Boolean         @default(true)
@@ -280,11 +298,11 @@ enum QuotationStatus {
 }
 
 model Quotation {
-  id            String          @id @default(uuid())
-  quotationNo   String          @unique // e.g., QTN-2024-001
-  
-  leadId        String?
-  lead          Lead?           @relation(fields: [leadId], references: [id])
+  id          String @id @default(uuid())
+  quotationNo String @unique // e.g., QTN-2024-001
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
 
   customerName  String
   customerPhone String
@@ -294,27 +312,27 @@ model Quotation {
   notes         String?
   subtotal      Float
   discount      Float           @default(0)
-  discountType  String?         // FLAT, PERCENTAGE
+  discountType  String? // FLAT, PERCENTAGE
   gstAmount     Float
   grandTotal    Float
   status        QuotationStatus @default(DRAFT)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  items         QuotationItem[]
+  items QuotationItem[]
 }
 
 model QuotationItem {
-  id          String   @id @default(uuid())
+  id          String         @id @default(uuid())
   quotationId String
-  quotation   Quotation @relation(fields: [quotationId], references: [id])
+  quotation   Quotation      @relation(fields: [quotationId], references: [id])
   productId   String?
   product     ProductMaster? @relation(fields: [productId], references: [id])
   name        String
   quantity    Int
-  unitPrice   Float    // Stored separately for historical accuracy
+  unitPrice   Float // Stored separately for historical accuracy
   totalPrice  Float
-  createdAt   DateTime @default(now())
+  createdAt   DateTime       @default(now())
 }
 
 enum LeadStatus {
@@ -332,25 +350,25 @@ enum LeadStatus {
 }
 
 model Lead {
-  id                    String      @id @default(uuid())
-  customerName          String
-  phone                 String
-  address               String?
-  requirementSummary    String?
-  status                LeadStatus  @default(NEW_LEAD)
-  
-  assignedTechnicianId  String?
-  assignedTechnician    User?       @relation("LeadTechnician", fields: [assignedTechnicianId], references: [id])
-  
-  siteVisitDate         DateTime?
-  nextFollowUpDate      DateTime?
-  followUpCount         Int         @default(0)
-  lastFollowUpNote      String?
-  
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
+  id                 String     @id @default(uuid())
+  customerName       String
+  phone              String
+  address            String?
+  requirementSummary String?
+  status             LeadStatus @default(NEW_LEAD)
 
-  quotations            Quotation[]
+  assignedTechnicianId String?
+  assignedTechnician   User?   @relation("LeadTechnician", fields: [assignedTechnicianId], references: [id])
+
+  siteVisitDate    DateTime?
+  nextFollowUpDate DateTime?
+  followUpCount    Int       @default(0)
+  lastFollowUpNote String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  quotations             Quotation[]
   installationAssignment InstallationAssignment?
 }
 
@@ -361,20 +379,20 @@ enum InstallationStatus {
 }
 
 model InstallationAssignment {
-  id                String      @id @default(uuid())
-  
-  leadId            String      @unique
-  lead              Lead        @relation(fields: [leadId], references: [id])
-  
-  srTechnicianId    String
-  srTechnician      User        @relation("InstallationSrTech", fields: [srTechnicianId], references: [id])
-  
-  supportStaffId    String?
-  supportStaff      User?       @relation("InstallationSupport", fields: [supportStaffId], references: [id])
-  
-  assignedDate      DateTime    @default(now())
-  status            InstallationStatus @default(PENDING)
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id String @id @default(uuid())
+
+  leadId String @unique
+  lead   Lead   @relation(fields: [leadId], references: [id])
+
+  srTechnicianId String
+  srTechnician   User   @relation("InstallationSrTech", fields: [srTechnicianId], references: [id])
+
+  supportStaffId String?
+  supportStaff   User?   @relation("InstallationSupport", fields: [supportStaffId], references: [id])
+
+  assignedDate DateTime           @default(now())
+  status       InstallationStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

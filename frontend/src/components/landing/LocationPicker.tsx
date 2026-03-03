@@ -110,9 +110,16 @@ const LocationPicker = ({ onLocationSelect, initialAddress }: LocationPickerProp
 
     const handleUseMyLocation = () => {
         if (!navigator.geolocation) {
-            toast.error("Geolocation is not supported by your browser");
+            toast.error("Geolocation is not supported by your browser.");
             return;
         }
+
+        if (window.isSecureContext === false) {
+            toast.error("Auto-location requires HTTPS in production. Please search manually.");
+            return;
+        }
+
+        toast.info("Requesting location access...");
 
         navigator.geolocation.getCurrentPosition(
             (pos) => {
@@ -120,10 +127,13 @@ const LocationPicker = ({ onLocationSelect, initialAddress }: LocationPickerProp
                 const newPos: [number, number] = [latitude, longitude];
                 setPosition(newPos);
                 reverseGeocode(latitude, longitude);
+                toast.success("Location found!");
             },
-            () => {
-                toast.error("Unable to retrieve your location");
-            }
+            (err) => {
+                console.error("Geolocation error:", err);
+                toast.error(`Location access denied or failed: ${err.message}`);
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     };
 

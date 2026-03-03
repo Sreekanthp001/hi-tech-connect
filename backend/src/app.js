@@ -18,6 +18,7 @@ const quotationRoutes = require('./routes/quotationRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const installationRoutes = require('./routes/installationRoutes');
+const workflowRoutes = require('./routes/workflowRoutes');
 const portfolioController = require('./controllers/portfolioController');
 
 const app = express();
@@ -76,6 +77,7 @@ app.use('/api/quotations', quotationRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/installations', installationRoutes);
+app.use('/api/workflow', workflowRoutes);
 
 // Error handling middleware (optional but recommended)
 app.use((err, req, res, next) => {
