@@ -696,6 +696,31 @@ exports.uploadTicketPhoto = async (req, res) => {
             }
         });
 
+        // Update the actual Ticket model's before_image and after_image JSON arrays
+        const ticket = await prisma.ticket.findUnique({
+            where: { id },
+            select: { beforeImages: true, afterImages: true }
+        });
+
+        if (ticket) {
+            let beforeImages = Array.isArray(ticket.beforeImages) ? ticket.beforeImages : [];
+            let afterImages = Array.isArray(ticket.afterImages) ? ticket.afterImages : [];
+
+            if (type === 'BEFORE') {
+                beforeImages.push(imageUrl);
+                await prisma.ticket.update({
+                    where: { id },
+                    data: { beforeImages }
+                });
+            } else if (type === 'AFTER') {
+                afterImages.push(imageUrl);
+                await prisma.ticket.update({
+                    where: { id },
+                    data: { afterImages }
+                });
+            }
+        }
+
         res.status(201).json(photo);
     } catch (error) {
         console.error("Upload photo error:", error);

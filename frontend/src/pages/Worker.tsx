@@ -119,8 +119,8 @@ const WorkerDashboard = () => {
         setUpdating(ticketId);
         try {
             const formData = new FormData();
-            formData.append("file", file);
             formData.append("type", type);
+            formData.append("file", file);
 
             const res = await apiFetch(`/worker/tickets/${ticketId}/upload-photo`, {
                 method: "POST",
