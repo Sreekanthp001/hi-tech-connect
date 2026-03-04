@@ -37,11 +37,11 @@ const distributeWorkerSalary = async (ticketId, totalAmount) => {
 // 1. Public Ticket Creation
 exports.createTicket = async (req, res) => {
     try {
-        const { title, description, type, address, latitude, longitude, clientName, clientPhone, clientEmail } = req.body;
+        const { title, description, type, address, latitude, longitude, clientName, clientPhone, clientEmail, requestType } = req.body;
 
         // Basic presence validation
-        if (!title || !description || !type || !address || !clientName || !clientPhone) {
-            return res.status(400).json({ error: "Required fields are missing" });
+        if (!title || !description || !type || !address || !clientName || !clientPhone || !requestType) {
+            return res.status(400).json({ error: "Required fields are missing (title, description, type, address, clientName, clientPhone, requestType)" });
         }
 
         // Phone validation: numeric and 10+ digits
@@ -82,6 +82,7 @@ exports.createTicket = async (req, res) => {
                 clientName,
                 clientPhone,
                 clientEmail,
+                requestType,
                 status: 'PENDING'
             }
         });

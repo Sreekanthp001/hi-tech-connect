@@ -285,6 +285,7 @@ const AdminDashboard = () => {
         title: "",
         description: "",
         type: "INSTALLATION",
+        requestType: "New Installation",
         address: "",
         latitude: null as number | null,
         longitude: null as number | null,
@@ -755,7 +756,18 @@ const AdminDashboard = () => {
     const handleCreateManualTicket = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!manualTicket.latitude || !manualTicket.address) {
-            toast.error("Please select a location on the map.");
+            toast.error("Please select a precise location on the map.");
+            return;
+        }
+
+        const cleanPhone = manualTicket.clientPhone.replace(/\s+/g, '').replace('+', '');
+        if (!/^\d{10,}$/.test(cleanPhone)) {
+            toast.error("Invalid phone number. Must be at least 10 digits.");
+            return;
+        }
+
+        if (!manualTicket.title.trim() || !manualTicket.description.trim() || !manualTicket.clientName.trim()) {
+            toast.error("Please fill in all required fields.");
             return;
         }
 
@@ -2149,19 +2161,41 @@ const AdminDashboard = () => {
                                             <div className="space-y-4 rounded-xl border bg-secondary/5 p-4">
                                                 <h3 className="text-sm font-black uppercase tracking-widest text-accent">Ticket Details</h3>
                                                 <div className="space-y-4">
-                                                    <div className="space-y-2">
-                                                        <Label className="text-xs font-bold uppercase text-muted-foreground text-center block">Service Category *</Label>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            {["INSTALLATION", "COMPLAINT"].map(t => (
-                                                                <button
-                                                                    key={t}
-                                                                    type="button"
-                                                                    onClick={() => setManualTicket(p => ({ ...p, type: t }))}
-                                                                    className={`text-[10px] font-black tracking-widest py-2 rounded-md border-2 transition-all ${manualTicket.type === t ? "bg-accent border-accent text-white" : "border-secondary/50 text-muted-foreground hover:border-accent/50"}`}
-                                                                >
-                                                                    {t}
-                                                                </button>
-                                                            ))}
+                                                    <div className="space-y-4">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold uppercase text-muted-foreground text-center block">Service Category *</Label>
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                {["INSTALLATION", "COMPLAINT"].map(t => (
+                                                                    <button
+                                                                        key={t}
+                                                                        type="button"
+                                                                        onClick={() => setManualTicket(p => ({
+                                                                            ...p,
+                                                                            type: t,
+                                                                            requestType: t === "INSTALLATION" ? "New Installation" : "Repair / Maintenance"
+                                                                        }))}
+                                                                        className={`text-[10px] font-black tracking-widest py-2 rounded-md border-2 transition-all ${manualTicket.type === t ? "bg-accent border-accent text-white" : "border-secondary/50 text-muted-foreground hover:border-accent/50"}`}
+                                                                    >
+                                                                        {t}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-2">
+                                                            <Label className="text-xs font-bold uppercase text-muted-foreground text-center block">Request Type *</Label>
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                {["New Installation", "Repair / Maintenance", "Upgrade / AMC"].map(rt => (
+                                                                    <button
+                                                                        key={rt}
+                                                                        type="button"
+                                                                        onClick={() => setManualTicket(p => ({ ...p, requestType: rt }))}
+                                                                        className={`text-[9px] font-bold py-2 rounded-md border-2 transition-all ${manualTicket.requestType === rt ? "bg-primary border-primary text-white" : "border-secondary/50 text-muted-foreground hover:border-primary/50"}`}
+                                                                    >
+                                                                        {rt}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div className="space-y-2">

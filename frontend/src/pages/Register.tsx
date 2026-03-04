@@ -29,10 +29,13 @@ const Register = () => {
           title: "New Connection Request",
           description: `New customer registration from ${form.name}`,
           type: "INSTALLATION",
+          requestType: "New Installation",
           address: "To be confirmed",
           clientName: form.name,
           clientPhone: form.phone,
           clientEmail: form.email,
+          latitude: 12.9716, // Default Bangalore coordinates or 0
+          longitude: 77.5946,
         },
       });
       toast.success("Registration request sent! We'll contact you shortly.");

@@ -18,6 +18,7 @@ const TicketForm = () => {
         title: "",
         description: "",
         type: "INSTALLATION",
+        requestType: "New Installation",
         address: "",
         latitude: null as number | null,
         longitude: null as number | null,
@@ -44,8 +45,19 @@ const TicketForm = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!form.address || !form.latitude) {
-            toast.error("Please select a location on the map.");
+        if (!form.address || form.latitude === null || form.longitude === null) {
+            toast.error("Please select a precise location on the map.");
+            return;
+        }
+
+        const cleanPhone = form.clientPhone.replace(/\s+/g, '').replace('+', '');
+        if (!/^\d{10,}$/.test(cleanPhone)) {
+            toast.error("Please enter a valid phone number (at least 10 digits).");
+            return;
+        }
+
+        if (!form.title.trim() || !form.description.trim() || !form.clientName.trim()) {
+            toast.error("Please fill in all required fields.");
             return;
         }
 
@@ -61,6 +73,7 @@ const TicketForm = () => {
                 title: "",
                 description: "",
                 type: "INSTALLATION",
+                requestType: "New Installation",
                 address: "",
                 latitude: null,
                 longitude: null,
@@ -127,24 +140,49 @@ const TicketForm = () => {
                                 </div>
                             ) : (
                                 <form onSubmit={handleSubmit} className="space-y-8">
-                                    {/* Service Type */}
-                                    <div className="space-y-4">
-                                        <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Service Category *</Label>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {SERVICE_TYPES.map(({ value, label, icon: Icon }) => (
-                                                <button
-                                                    key={value}
-                                                    type="button"
-                                                    onClick={() => setForm((p) => ({ ...p, type: value }))}
-                                                    className={`flex items-center gap-4 rounded-lg border-2 p-5 text-left transition-all duration-200 ${form.type === value
-                                                        ? "border-accent bg-accent/5 text-accent ring-2 ring-accent/20"
-                                                        : "border-gray-100 hover:border-gray-200 bg-white"
-                                                        }`}
-                                                >
-                                                    <Icon className={`h-6 w-6 shrink-0 ${form.type === value ? "text-accent" : "text-gray-400"}`} />
-                                                    <span className="font-bold">{label}</span>
-                                                </button>
-                                            ))}
+                                    {/* Service Type & Request Type */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-4">
+                                            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Service Category *</Label>
+                                            <div className="grid grid-cols-1 gap-4">
+                                                {SERVICE_TYPES.map(({ value, label, icon: Icon }) => (
+                                                    <button
+                                                        key={value}
+                                                        type="button"
+                                                        onClick={() => setForm((p) => ({
+                                                            ...p,
+                                                            type: value,
+                                                            requestType: value === "INSTALLATION" ? "New Installation" : "Repair / Maintenance"
+                                                        }))}
+                                                        className={`flex items-center gap-4 rounded-lg border-2 p-5 text-left transition-all duration-200 ${form.type === value
+                                                            ? "border-accent bg-accent/5 text-accent ring-2 ring-accent/20"
+                                                            : "border-gray-100 hover:border-gray-200 bg-white"
+                                                            }`}
+                                                    >
+                                                        <Icon className={`h-6 w-6 shrink-0 ${form.type === value ? "text-accent" : "text-gray-400"}`} />
+                                                        <span className="font-bold">{label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <Label className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Request Specifics *</Label>
+                                            <div className="grid grid-cols-1 gap-4">
+                                                {["New Installation", "Repair / Maintenance", "Upgrade / AMC"].map((rt) => (
+                                                    <button
+                                                        key={rt}
+                                                        type="button"
+                                                        onClick={() => setForm((p) => ({ ...p, requestType: rt }))}
+                                                        className={`flex items-center justify-center rounded-lg border-2 p-4 text-center transition-all duration-200 text-sm font-bold ${form.requestType === rt
+                                                            ? "border-primary bg-primary/5 text-primary ring-2 ring-primary/20"
+                                                            : "border-gray-100 hover:border-gray-200 bg-white"
+                                                            }`}
+                                                    >
+                                                        {rt}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
 
