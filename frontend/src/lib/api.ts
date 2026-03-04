@@ -11,12 +11,15 @@ export async function apiFetch(endpoint: string, options: any = {}) {
 
     let finalBody = body;
 
-    // Handle JSON body automatically if it's a plain object
-    if (body && typeof body === 'object' && !(body instanceof FormData) && !(body instanceof Blob)) {
+    // Robust JSON body handling
+    if (body !== undefined && body !== null && !(body instanceof FormData) && !(body instanceof Blob)) {
         if (!headers['Content-Type']) {
             headers['Content-Type'] = 'application/json';
         }
-        finalBody = JSON.stringify(body);
+        // Stringify if it's an object, otherwise keep as is
+        if (typeof body === 'object') {
+            finalBody = JSON.stringify(body);
+        }
     }
 
     const response = await fetch(`${API_BASE}${endpoint}`, {

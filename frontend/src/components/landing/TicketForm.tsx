@@ -65,7 +65,7 @@ const TicketForm = () => {
         try {
             await apiFetch("/tickets", {
                 method: "POST",
-                body: JSON.stringify(form),
+                body: form,
             });
             toast.success("Request submitted! We'll contact you shortly.");
             setSubmitted(true);

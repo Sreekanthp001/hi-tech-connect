@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const response = await apiFetch('/auth/login', {
                 method: 'POST',
-                body: JSON.stringify({ email, password }),
+                body: { email, password },
             });
             const { token, user } = response.data;
 

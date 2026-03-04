@@ -485,7 +485,7 @@ const AdminDashboard = () => {
         try {
             await apiFetch("/admin/expenses", {
                 method: "POST",
-                body: JSON.stringify(newExpense),
+                body: newExpense,
             });
             toast.success("Expense recorded successfully");
             closeExpenseModal();
@@ -683,7 +683,7 @@ const AdminDashboard = () => {
         try {
             await apiFetch(`/admin/reset-password/${id}`, {
                 method: "PATCH",
-                body: JSON.stringify({ newPassword }),
+                body: { newPassword },
             });
             toast.success("Password reset successfully.");
         } catch (err: any) {
@@ -704,7 +704,7 @@ const AdminDashboard = () => {
         try {
             await apiFetch(`/admin/workers/${id}/telegram`, {
                 method: "PATCH",
-                body: JSON.stringify({ telegramId: val || null }),
+                body: { telegramId: val || null },
             });
             toast.success("Worker Telegram ID updated!");
             fetchWorkers();
@@ -721,7 +721,7 @@ const AdminDashboard = () => {
         try {
             await apiFetch(`/admin/worker-finance/${selectedFinanceWorker.workerId}`, {
                 method: "PATCH",
-                body: JSON.stringify(salaryForm),
+                body: salaryForm,
             });
             toast.success("Salary and Designation updated!");
             setIsSalaryModalOpen(false);
@@ -737,11 +737,11 @@ const AdminDashboard = () => {
         try {
             await apiFetch("/admin/worker-advance", {
                 method: "POST",
-                body: JSON.stringify({
+                body: {
                     workerId: selectedFinanceWorker.workerId,
                     amount: advanceForm.amount,
                     reason: advanceForm.reason
-                }),
+                },
             });
             toast.success("Advance recorded successfully!");
             setIsAdvanceModalOpen(false);
@@ -775,7 +775,7 @@ const AdminDashboard = () => {
         try {
             await apiFetch("/admin/tickets", {
                 method: "POST",
-                body: JSON.stringify(manualTicket),
+                body: manualTicket,
             });
             toast.success("Manual ticket created successfully!");
             closeTicketModal();

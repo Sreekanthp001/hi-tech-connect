@@ -104,7 +104,7 @@ const WorkerDashboard = () => {
         try {
             await apiFetch(`/worker/tickets/${ticketId}/progress`, {
                 method: "PATCH",
-                body: JSON.stringify({ progress }),
+                body: { progress },
             });
             toast.success("Progress updated!");
             setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, ticketProgress: progress as any } : t));
@@ -161,7 +161,7 @@ const WorkerDashboard = () => {
 
             await apiFetch(`/worker/tickets/${ticketId}/status`, {
                 method: "PATCH",
-                body: JSON.stringify(payload),
+                body: payload,
             });
 
             toast.success(`Ticket marked as ${STATUS_LABELS[newStatus]}!`);
