@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '@/lib/api';
+import apiFetch from '@/lib/api';
 
 interface User {
     id: string;
@@ -36,7 +36,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const login = async (email: string, password: string) => {
         try {
-            const response = await api.post('/auth/login', { email, password });
+            const response = await apiFetch('/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({ email, password }),
+            });
             const { token, user } = response.data;
 
             localStorage.setItem('token', token);

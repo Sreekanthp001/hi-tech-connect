@@ -15,7 +15,7 @@ import {
     Bell, ShieldAlert, CalendarClock, Edit3, MinusCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import api from "@/lib/api";
+import apiFetch from "@/lib/api";
 import { toast } from "sonner";
 import LocationPicker from "@/components/landing/LocationPicker";
 import NotificationBell from "@/components/ui/NotificationBell";
@@ -234,13 +234,8 @@ const AdminDashboard = () => {
     const fetchNotifications = async () => {
         setNotifLoading(true);
         try {
-            const response = await fetch("http://localhost:5000/api/admin/notifications", {
-                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setNotifications(data);
-            }
+            const response = await apiFetch("/admin/notifications");
+            setNotifications(response.data);
         } catch (error) {
             console.error("Fetch notifications error:", error);
             toast.error("Failed to load alerts");
@@ -251,14 +246,9 @@ const AdminDashboard = () => {
 
     const handleMarkRead = async (id: string) => {
         try {
-            const response = await fetch(`http://localhost:5000/api/admin/notifications/${id}/read`, {
-                method: "PATCH",
-                headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
-            });
-            if (response.ok) {
-                setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-                toast.success("Alert resolved");
-            }
+            await apiFetch(`/admin/notifications/${id}/read`, { method: "PATCH" });
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+            toast.success("Alert resolved");
         } catch (error) {
             console.error("Mark read error:", error);
             toast.error("Failed to update alert");
@@ -268,7 +258,7 @@ const AdminDashboard = () => {
     const fetchRevenueBreakdown = async () => {
         setRevBreakdownLoading(true);
         try {
-            const res = await api.get("/admin/revenue-breakdown");
+            const res = await apiFetch("/admin/revenue-breakdown");
             setRevenueBreakdown(res.data);
         } catch {
             toast.error("Failed to load revenue breakdown");
@@ -280,7 +270,7 @@ const AdminDashboard = () => {
     const fetchWorkerFinances = async () => {
         setFinancesLoading(true);
         try {
-            const res = await api.get("/admin/worker-finance");
+            const res = await apiFetch("/admin/worker-finance");
             setWorkerFinances(res.data);
         } catch {
             toast.error("Failed to load worker finances");
@@ -366,7 +356,7 @@ const AdminDashboard = () => {
     const fetchTickets = async () => {
         setTicketsLoading(true);
         try {
-            const res = await api.get("/admin/tickets");
+            const res = await apiFetch("/admin/tickets");
             setTickets(res.data);
         } catch {
             toast.error("Failed to load tickets");
@@ -378,7 +368,7 @@ const AdminDashboard = () => {
     const fetchWorkers = async () => {
         setWorkersLoading(true);
         try {
-            const res = await api.get("/admin/workers");
+            const res = await apiFetch("/admin/workers");
             setWorkers(res.data);
         } catch {
             toast.error("Failed to load workers");
@@ -405,7 +395,7 @@ const AdminDashboard = () => {
     const fetchStats = async () => {
         setStatsLoading(true);
         try {
-            const res = await api.get("/admin/dashboard-stats");
+            const res = await apiFetch("/admin/dashboard-stats");
             setStats(res.data);
         } catch {
             toast.error("Failed to load dashboard stats");
@@ -417,7 +407,7 @@ const AdminDashboard = () => {
     const fetchMaintenanceAlerts = async () => {
         setMaintenanceAlertsLoading(true);
         try {
-            const res = await api.get("/admin/maintenance-alerts");
+            const res = await apiFetch("/admin/maintenance-alerts");
             setMaintenanceAlerts(res.data);
         } catch {
             toast.error("Failed to load maintenance alerts");
@@ -429,7 +419,7 @@ const AdminDashboard = () => {
     const fetchPerf = async () => {
         setPerfLoading(true);
         try {
-            const res = await api.get("/admin/worker-performance");
+            const res = await apiFetch("/admin/worker-performance");
             setPerf(res.data);
         } catch {
             toast.error("Failed to load performance data");
@@ -442,7 +432,7 @@ const AdminDashboard = () => {
     const fetchCustomers = async (search = "") => {
         setCustomersLoading(true);
         try {
-            const res = await api.get(`/admin/customers${search ? `?search=${search}` : ""}`);
+            const res = await apiFetch(`/admin/customers${search ? `?search=${search}` : ""}`);
             setCustomers(res.data);
         } catch {
             toast.error("Failed to load customers");
@@ -454,7 +444,7 @@ const AdminDashboard = () => {
     const fetchCustomerProfile = async (id: string) => {
         setCustomerProfileLoading(true);
         try {
-            const res = await api.get(`/admin/customer/${id}`);
+            const res = await apiFetch(`/admin/customer/${id}`);
             setSelectedCustomer(res.data);
             setActiveTab("customers");
         } catch {
@@ -467,7 +457,7 @@ const AdminDashboard = () => {
     const fetchRevStats = async () => {
         setRevLoading(true);
         try {
-            const res = await api.get("/admin/revenue-stats");
+            const res = await apiFetch("/admin/revenue-stats");
             setRevStats(res.data);
         } catch {
             toast.error("Failed to load revenue analytics");
@@ -479,7 +469,7 @@ const AdminDashboard = () => {
     const fetchExpenses = async () => {
         setExpensesLoading(true);
         try {
-            const res = await api.get("/admin/expenses");
+            const res = await apiFetch("/admin/expenses");
             setExpenses(res.data);
         } catch {
             toast.error("Failed to load expenses");
@@ -492,7 +482,10 @@ const AdminDashboard = () => {
         e.preventDefault();
         setCreatingExpense(true);
         try {
-            await api.post("/admin/expenses", newExpense);
+            await apiFetch("/admin/expenses", {
+                method: "POST",
+                body: JSON.stringify(newExpense),
+            });
             toast.success("Expense recorded successfully");
             closeExpenseModal();
             fetchExpenses();
@@ -507,7 +500,7 @@ const AdminDashboard = () => {
     const handleDeleteExpense = async (id: string) => {
         if (!window.confirm("Delete this expense record?")) return;
         try {
-            await api.delete(`/admin/expenses/${id}`);
+            await apiFetch(`/admin/expenses/${id}`, { method: "DELETE" });
             toast.success("Expense deleted");
             fetchExpenses();
             fetchRevStats();
@@ -529,22 +522,28 @@ const AdminDashboard = () => {
 
             if (needsCompletion) {
                 // Complete ticket and record initial payment + warranty info
-                await api.patch(`/admin/tickets/${paymentData.ticketId}/status`, {
-                    status: "COMPLETED",
-                    amount: paymentData.amount,
-                    paymentMode: paymentData.paymentMode,
-                    workSummary: paymentData.workSummary,
-                    warrantyStartDate: paymentData.warrantyStartDate || undefined,
-                    warrantyExpiryDate: paymentData.warrantyExpiryDate || undefined,
-                    amcEnabled: paymentData.amcEnabled,
-                    amcRenewalDate: paymentData.amcRenewalDate || undefined
+                await apiFetch(`/admin/tickets/${paymentData.ticketId}/status`, {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        status: "COMPLETED",
+                        amount: paymentData.amount,
+                        paymentMode: paymentData.paymentMode,
+                        workSummary: paymentData.workSummary,
+                        warrantyStartDate: paymentData.warrantyStartDate || undefined,
+                        warrantyExpiryDate: paymentData.warrantyExpiryDate || undefined,
+                        amcEnabled: paymentData.amcEnabled,
+                        amcRenewalDate: paymentData.amcRenewalDate || undefined
+                    }),
                 });
                 toast.success("Ticket completed and documentation stored!");
             } else {
                 // Add settlement payment to existing ticket
-                await api.post(`/admin/tickets/${paymentData.ticketId}/add-payment`, {
-                    amount: paymentData.amount,
-                    paymentMode: paymentData.paymentMode
+                await apiFetch(`/admin/tickets/${paymentData.ticketId}/add-payment`, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        amount: paymentData.amount,
+                        paymentMode: paymentData.paymentMode
+                    }),
                 });
                 toast.success("Settlement payment recorded successfully!");
             }
@@ -561,7 +560,7 @@ const AdminDashboard = () => {
 
     const handleDownloadInvoice = async (invoiceId: string, invoiceNumber: string) => {
         try {
-            const res = await api.get(`/invoices/${invoiceId}/download`, {
+            const res = await apiFetch(`/invoices/${invoiceId}/download`, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -612,7 +611,10 @@ const AdminDashboard = () => {
 
         setAssigning(ticketId);
         try {
-            await api.patch(`/admin/assign/${ticketId}`, payload);
+            await apiFetch(`/admin/assign/${ticketId}`, {
+                method: "PATCH",
+                body: JSON.stringify(payload),
+            });
             toast.success("Workers assigned successfully!");
             closeAssignModal();
             fetchTickets();
@@ -645,7 +647,10 @@ const AdminDashboard = () => {
         e.preventDefault();
         setCreatingWorker(true);
         try {
-            await api.post("/admin/create-worker", newWorker);
+            await apiFetch("/admin/create-worker", {
+                method: "POST",
+                body: JSON.stringify(newWorker),
+            });
             toast.success(`Worker ${newWorker.name} created successfully!`);
             setNewWorker({ name: "", email: "", password: "", phone: "" });
             fetchWorkers();
@@ -660,7 +665,7 @@ const AdminDashboard = () => {
     const handleDeleteWorker = async (id: string) => {
         if (!window.confirm("Are you sure you want to delete this worker? This cannot be undone.")) return;
         try {
-            await api.delete(`/admin/worker/${id}`);
+            await apiFetch(`/admin/worker/${id}`, { method: "DELETE" });
             toast.success("Worker deleted successfully.");
             fetchWorkers();
             fetchPerf();
@@ -675,7 +680,10 @@ const AdminDashboard = () => {
         if (!newPassword) return;
         if (newPassword.length < 6) { toast.error("Password too short."); return; }
         try {
-            await api.patch(`/admin/reset-password/${id}`, { newPassword });
+            await apiFetch(`/admin/reset-password/${id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ newPassword }),
+            });
             toast.success("Password reset successfully.");
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to reset password.");
@@ -693,7 +701,10 @@ const AdminDashboard = () => {
 
         setUpdatingTelegram(id);
         try {
-            await api.patch(`/admin/workers/${id}/telegram`, { telegramId: val || null });
+            await apiFetch(`/admin/workers/${id}/telegram`, {
+                method: "PATCH",
+                body: JSON.stringify({ telegramId: val || null }),
+            });
             toast.success("Worker Telegram ID updated!");
             fetchWorkers();
         } catch (err: any) {
@@ -707,7 +718,10 @@ const AdminDashboard = () => {
         e.preventDefault();
         if (!selectedFinanceWorker) return;
         try {
-            await api.patch(`/admin/worker-finance/${selectedFinanceWorker.workerId}`, salaryForm);
+            await apiFetch(`/admin/worker-finance/${selectedFinanceWorker.workerId}`, {
+                method: "PATCH",
+                body: JSON.stringify(salaryForm),
+            });
             toast.success("Salary and Designation updated!");
             setIsSalaryModalOpen(false);
             fetchWorkerFinances();
@@ -720,10 +734,13 @@ const AdminDashboard = () => {
         e.preventDefault();
         if (!selectedFinanceWorker) return;
         try {
-            await api.post("/admin/worker-advance", {
-                workerId: selectedFinanceWorker.workerId,
-                amount: advanceForm.amount,
-                reason: advanceForm.reason
+            await apiFetch("/admin/worker-advance", {
+                method: "POST",
+                body: JSON.stringify({
+                    workerId: selectedFinanceWorker.workerId,
+                    amount: advanceForm.amount,
+                    reason: advanceForm.reason
+                }),
             });
             toast.success("Advance recorded successfully!");
             setIsAdvanceModalOpen(false);
@@ -744,7 +761,10 @@ const AdminDashboard = () => {
 
         setIsCreatingTicket(true);
         try {
-            await api.post("/admin/tickets", manualTicket);
+            await apiFetch("/admin/tickets", {
+                method: "POST",
+                body: JSON.stringify(manualTicket),
+            });
             toast.success("Manual ticket created successfully!");
             closeTicketModal();
             fetchTickets();
@@ -758,7 +778,7 @@ const AdminDashboard = () => {
 
     const handleDownloadStatement = async (customerId: string, clientName: string) => {
         try {
-            const response = await api.get(`/admin/customers/${customerId}/statement`, {
+            const response = await apiFetch(`/admin/customers/${customerId}/statement`, {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -779,7 +799,7 @@ const AdminDashboard = () => {
         }
 
         try {
-            await api.delete(`/admin/tickets/${id}`);
+            await apiFetch(`/admin/tickets/${id}`, { method: "DELETE" });
             toast.success("Ticket deleted successfully!");
             fetchTickets();
             fetchStats();

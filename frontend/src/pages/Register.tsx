@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, CheckCircle2 } from "lucide-react";
-import api from "@/lib/api";
+import apiFetch from "@/lib/api";
 import { toast } from "sonner";
 
 const Register = () => {
@@ -23,14 +23,17 @@ const Register = () => {
     setIsLoading(true);
     try {
       // Submit as a new connection ticket since there's no register endpoint
-      await api.post("/tickets", {
-        title: "New Connection Request",
-        description: `New customer registration from ${form.name}`,
-        type: "INSTALLATION",
-        address: "To be confirmed",
-        clientName: form.name,
-        clientPhone: form.phone,
-        clientEmail: form.email,
+      await apiFetch("/tickets", {
+        method: "POST",
+        body: {
+          title: "New Connection Request",
+          description: `New customer registration from ${form.name}`,
+          type: "INSTALLATION",
+          address: "To be confirmed",
+          clientName: form.name,
+          clientPhone: form.phone,
+          clientEmail: form.email,
+        },
       });
       toast.success("Registration request sent! We'll contact you shortly.");
       setSubmitted(true);

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ShieldCheck, Camera, CheckCircle2, AlertTriangle, MapPin } from "lucide-react";
-import api from "@/lib/api";
+import apiFetch from "@/lib/api";
 import { toast } from "sonner";
 import LocationPicker from "./LocationPicker";
 
@@ -51,7 +51,10 @@ const TicketForm = () => {
 
         setIsLoading(true);
         try {
-            await api.post("/tickets", form);
+            await apiFetch("/tickets", {
+                method: "POST",
+                body: JSON.stringify(form),
+            });
             toast.success("Request submitted! We'll contact you shortly.");
             setSubmitted(true);
             setForm({

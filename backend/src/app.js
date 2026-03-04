@@ -27,7 +27,7 @@ const app = express();
 app.use(express.json());
 
 const allowedOrigins = process.env.NODE_ENV === "production"
-    ? [process.env.FRONTEND_URL]
+    ? ["https://sree84s.site", "http://sree84s.site"]
     : [
         "http://localhost:8080",
         "http://127.0.0.1:8080",

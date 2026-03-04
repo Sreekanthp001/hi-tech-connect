@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import api from "@/lib/api";
+import apiFetch from "@/lib/api";
 import { toast } from "sonner";
 import NotificationBell from "@/components/ui/NotificationBell";
 
@@ -86,7 +86,7 @@ const WorkerDashboard = () => {
     const fetchTickets = async () => {
         setIsLoading(true);
         try {
-            const res = await api.get("/worker/tickets");
+            const res = await apiFetch("/worker/tickets");
             setTickets(res.data);
         } catch (err: any) {
             toast.error("Failed to load your assigned tickets.");
@@ -102,7 +102,10 @@ const WorkerDashboard = () => {
     const handleProgressUpdate = async (ticketId: string, progress: string) => {
         setUpdating(ticketId);
         try {
-            await api.patch(`/worker/tickets/${ticketId}/progress`, { progress });
+            await apiFetch(`/worker/tickets/${ticketId}/progress`, {
+                method: "PATCH",
+                body: JSON.stringify({ progress }),
+            });
             toast.success("Progress updated!");
             setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, ticketProgress: progress as any } : t));
         } catch {
@@ -119,8 +122,9 @@ const WorkerDashboard = () => {
             formData.append("file", file);
             formData.append("type", type);
 
-            const res = await api.post(`/worker/tickets/${ticketId}/upload-photo`, formData, {
-                headers: { "Content-Type": "multipart/form-data" }
+            const res = await apiFetch(`/worker/tickets/${ticketId}/upload-photo`, {
+                method: "POST",
+                body: formData,
             });
 
             toast.success(`${type} photo uploaded!`);
@@ -155,7 +159,10 @@ const WorkerDashboard = () => {
                 payload.paymentNote = payment.paymentNote;
             }
 
-            await api.patch(`/worker/tickets/${ticketId}/status`, payload);
+            await apiFetch(`/worker/tickets/${ticketId}/status`, {
+                method: "PATCH",
+                body: JSON.stringify(payload),
+            });
 
             toast.success(`Ticket marked as ${STATUS_LABELS[newStatus]}!`);
 
@@ -710,9 +717,12 @@ const WorkerDashboard = () => {
                                     }
                                     setIsChangingPassword(true);
                                     try {
-                                        await api.patch("/worker/change-password", {
-                                            currentPassword: passwordForm.currentPassword,
-                                            newPassword: passwordForm.newPassword
+                                        await apiFetch("/worker/change-password", {
+                                            method: "PATCH",
+                                            body: JSON.stringify({
+                                                currentPassword: passwordForm.currentPassword,
+                                                newPassword: passwordForm.newPassword
+                                            }),
                                         });
                                         toast.success("Password updated successfully!");
                                         setShowPasswordModal(false);
