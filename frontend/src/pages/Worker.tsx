@@ -128,6 +128,8 @@ const WorkerDashboard = () => {
 
     useEffect(() => {
         fetchTickets();
+        const interval = setInterval(fetchTickets, 10000); // Poll every 10s
+        return () => clearInterval(interval);
     }, []);
 
     const handleProgressUpdate = async (ticketId: string, progress: string) => {

@@ -209,48 +209,16 @@ exports.assignWorker = async (req, res) => {
             return updatedTicket;
         });
 
-        // Fire-and-forget notifications
-        // 1. Internal notification
-        result.assignments.forEach(assign => {
-            notifications.onWorkerAssigned({ ...result, workerId: assign.workerId }).catch(err => {
-                console.error("[Notification Error] onWorkerAssigned:", err.message);
+        // Create notifications for each assigned worker
+        for (const assign of result.assignments) {
+            await prisma.notification.create({
+                data: {
+                    userId: assign.workerId,
+                    title: "New Job Assigned",
+                    message: "You have been assigned a new service ticket.",
+                    type: "JOB_ASSIGNED"
+                }
             });
-        });
-
-        // 2. Telegram Notifications for ALL assigned workers (Phase 11 format)
-        const primaryTech = result.assignments.find(a => a.isPrimary)?.worker.name || 'N/A';
-        const supportTechs = result.assignments.filter(a => !a.isPrimary).map(a => a.worker.name);
-
-        result.assignments.forEach(assign => {
-            if (assign.worker.telegramId) {
-                const botMessage = `🔔 <b>NEW WORK ASSIGNED</b>\n\n` +
-                    `🆔 <b>Ticket ID:</b> ${result.id.slice(0, 8).toUpperCase()}\n` +
-                    `👤 <b>Customer:</b> ${result.clientName}\n` +
-                    `📞 <b>Phone:</b> ${result.clientPhone}\n` +
-                    `📍 <b>Location:</b> ${result.address}\n\n` +
-                    `👨​🔧 <b>Main Technician:</b> ${primaryTech}\n` +
-                    `👷 <b>Support Members:</b>\n${supportTechs.length > 0 ? supportTechs.map(name => `- ${name}`).join('\n') : '- None'}\n\n` +
-                    `Please login and update status.`;
-
-                telegramService.sendTelegramMessage(assign.worker.telegramId, botMessage)
-                    .catch(err => console.error(`[Telegram Error] Failed to send to ${assign.worker.name}:`, err.message));
-            }
-        });
-
-        // 3. Customer Notification - Worker Assigned
-        if (result.telegramId) {
-            const primaryAssignment = result.assignments.find(a => a.isPrimary) || result.assignments[0];
-            const primaryWorkerPhone = primaryAssignment?.worker?.phone || 'N/A';
-            const customerMsg =
-                `👷 <b>Technician Assigned!</b>\n\n` +
-                `A field engineer has been assigned to your service request.\n\n` +
-                `👨‍🔧 <b>Technician:</b> ${primaryTech}\n` +
-                `📞 <b>Phone:</b> ${primaryWorkerPhone}\n` +
-                `🔧 <b>Service Type:</b> ${result.type}\n` +
-                `📍 <b>Location:</b> ${result.address}\n` +
-                `🆔 <b>Ticket:</b> ${result.id.slice(0, 8).toUpperCase()}\n\n` +
-                `The technician will contact you or arrive at the site shortly. 🛡️`;
-            telegramService.sendTelegramMessage(result.telegramId, customerMsg).catch(() => { });
         }
 
         res.status(200).json(result);
@@ -263,29 +231,7 @@ exports.assignWorker = async (req, res) => {
     }
 };
 
-// 4. Worker: Get assigned tickets
-exports.getWorkerTickets = async (req, res) => {
-    try {
-        const tickets = await prisma.ticket.findMany({
-            where: {
-                assignments: { some: { workerId: req.user.userId } }
-            },
-            include: {
-                ticketPhotos: true,
-                assignments: {
-                    include: {
-                        worker: { select: { id: true, name: true } }
-                    }
-                }
-            },
-            orderBy: { createdAt: 'desc' }
-        });
-        res.status(200).json(tickets);
-    } catch (error) {
-        console.error("Get worker tickets error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-};
+
 
 // 5. Worker: Update status
 exports.updateStatus = async (req, res) => {
@@ -665,6 +611,15 @@ exports.assignPlanningWorker = async (req, res) => {
             }
         });
 
+        await prisma.notification.create({
+            data: {
+                userId: workerId,
+                title: "New Job Assigned",
+                message: "You have been assigned a new service ticket.",
+                type: "JOB_ASSIGNED"
+            }
+        });
+
         res.status(200).json(updatedTicket);
     } catch (error) {
         console.error("Assign planning worker error:", error);
@@ -686,6 +641,15 @@ exports.assignInstallationWorker = async (req, res) => {
             data: {
                 installationWorkerId: workerId,
                 status: 'INSTALLATION_ASSIGNED'
+            }
+        });
+
+        await prisma.notification.create({
+            data: {
+                userId: workerId,
+                title: "New Job Assigned",
+                message: "You have been assigned a new service ticket.",
+                type: "JOB_ASSIGNED"
             }
         });
 

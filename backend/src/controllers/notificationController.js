@@ -5,14 +5,18 @@ exports.getNotifications = async (req, res) => {
     try {
         const userId = req.user.userId;
         const notifications = await prisma.notification.findMany({
-            where: { userId },
-            orderBy: { createdAt: 'desc' },
-            take: 20 // Only show last 20
+            where: {
+                userId: userId
+            },
+            orderBy: {
+                createdAt: "desc"
+            },
+            take: 20
         });
-        res.status(200).json(notifications);
-    } catch (error) {
-        console.error("Get notifications error:", error);
-        res.status(500).json({ error: "Internal server error" });
+        res.json(notifications);
+    } catch (err) {
+        console.error("Notification error", err);
+        res.json([]);
     }
 };
 
