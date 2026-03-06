@@ -19,6 +19,8 @@ router.post('/tickets/:ticketId/add-payment', ticketController.addPayment);
 router.delete('/tickets/:id', ticketController.deleteTicket);
 router.post('/assign-survey/:id', workflowController.assignSiteVisit);
 router.post('/send-quotation/:id', workflowController.sendQuotation);
+router.patch('/tickets/:id/assign-planning-worker', ticketController.assignPlanningWorker);
+router.patch('/tickets/:id/assign-installation-worker', ticketController.assignInstallationWorker);
 
 // Ticket history / timeline
 router.get('/ticket/:id/history', ticketController.getTicketHistory);

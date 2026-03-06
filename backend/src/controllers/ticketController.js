@@ -84,7 +84,7 @@ exports.createTicket = async (req, res) => {
                 clientPhone,
                 clientEmail,
                 requestType,
-                status: 'PENDING'
+                status: 'NEW'
             }
         });
 
@@ -633,6 +633,54 @@ exports.updateProgress = async (req, res) => {
         res.status(200).json(updatedTicket);
     } catch (error) {
         console.error("Update progress error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Assign Planning Worker
+ * PATCH /api/admin/tickets/:id/assign-planning-worker
+ */
+exports.assignPlanningWorker = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { workerId } = req.body;
+
+        const updatedTicket = await prisma.ticket.update({
+            where: { id },
+            data: {
+                planningWorkerId: workerId,
+                status: 'SITE_VISIT_ASSIGNED'
+            }
+        });
+
+        res.status(200).json(updatedTicket);
+    } catch (error) {
+        console.error("Assign planning worker error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Assign Installation Worker
+ * PATCH /api/admin/tickets/:id/assign-installation-worker
+ */
+exports.assignInstallationWorker = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { workerId } = req.body;
+
+        const updatedTicket = await prisma.ticket.update({
+            where: { id },
+            data: {
+                installationWorkerId: workerId,
+                status: 'INSTALLATION_ASSIGNED'
+            }
+        });
+
+        res.status(200).json(updatedTicket);
+    } catch (error) {
+        console.error("Assign installation worker error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

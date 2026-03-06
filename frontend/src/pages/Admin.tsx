@@ -64,6 +64,10 @@ interface TicketRecord {
     ticketPhotos?: TicketPhoto[];
     quotationItems?: any;
     quotationStatus?: string;
+    planningWorkerId?: string;
+    planningWorker?: { id: string; name: string } | null;
+    installationWorkerId?: string;
+    installationWorker?: { id: string; name: string } | null;
     createdAt: string;
 }
 
@@ -138,6 +142,9 @@ const STATUS_LABELS: Record<string, string> = {
     INSTALLATION_ASSIGNED: "Installation Assigned",
     WORK_ASSIGNED: "Work Started",
     WORK_COMPLETED: "Finished",
+    NEW: "New Service Request",
+    SITE_VISIT_ASSIGNED: "Planning Assigned",
+    SITE_VISIT_COMPLETED: "Planning Done",
 };
 
 // ─── StatusBadge ────────────────────────────────────────────────────────────
@@ -153,6 +160,9 @@ const StatusBadge = ({ status }: { status: string }) => {
         "QUOTATION_SENT": "bg-orange-100 text-orange-700 border-orange-200 font-bold px-2 py-0.5",
         "APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold px-2 py-0.5",
         "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
+        "NEW": "bg-purple-100 text-purple-700 border-purple-200 font-bold px-2 py-0.5",
+        "SITE_VISIT_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5",
+        "SITE_VISIT_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold px-1 py-0.5",
     };
     return (
         <Badge variant="outline" className={styles[status] || ""}>
@@ -325,6 +335,7 @@ const AdminDashboard = () => {
         clientName: "",
         clientPhone: "",
         clientEmail: "",
+        alternatePhone: "",
     };
     const [manualTicket, setManualTicket] = useState(initialManualTicket);
 
@@ -384,6 +395,8 @@ const AdminDashboard = () => {
     const [primaryWorkerId, setPrimaryWorkerId] = useState("");
     const [supportWorkerIds, setSupportWorkerIds] = useState<string[]>([]);
     const [isSurveyAssign, setIsSurveyAssign] = useState(false);
+    const [isPlanningAssign, setIsPlanningAssign] = useState(false);
+    const [isInstallationAssign, setIsInstallationAssign] = useState(false);
 
 
     // ── Data fetchers ──────────────────────────────────────────────────────
@@ -646,12 +659,28 @@ const AdminDashboard = () => {
 
         setAssigning(ticketId);
         try {
-            const endpoint = isSurveyAssign ? `/admin/assign-survey/${ticketId}` : `/admin/assign/${ticketId}`;
+            let endpoint = "";
+            let method = "PATCH";
+            let body = JSON.stringify(payload);
+
+            if (isSurveyAssign) {
+                endpoint = `/admin/assign-survey/${ticketId}`;
+            } else if (isPlanningAssign) {
+                endpoint = `/admin/tickets/${ticketId}/assign-planning-worker`;
+                body = JSON.stringify({ workerId: primaryWorkerId });
+            } else if (isInstallationAssign) {
+                endpoint = `/admin/tickets/${ticketId}/assign-installation-worker`;
+                body = JSON.stringify({ workerId: primaryWorkerId });
+            } else {
+                endpoint = `/admin/assign/${ticketId}`;
+            }
+
             await apiFetch(endpoint, {
-                method: "PATCH",
-                body: JSON.stringify(payload),
+                method,
+                body,
             });
-            toast.success(isSurveyAssign ? "Survey technician assigned!" : "Workers assigned successfully!");
+
+            toast.success("Assignment updated successfully!");
             closeAssignModal();
             fetchTickets();
             fetchPerf();
@@ -660,6 +689,8 @@ const AdminDashboard = () => {
         } finally {
             setAssigning(null);
             setIsSurveyAssign(false);
+            setIsPlanningAssign(false);
+            setIsInstallationAssign(false);
         }
     };
 
@@ -739,8 +770,13 @@ const AdminDashboard = () => {
     const openAssignModal = (ticket: TicketRecord) => {
         setActiveAssignTicket(ticket);
 
-        // Pre-fill existing assignments if any
-        if (ticket.assignments && ticket.assignments.length > 0) {
+        if (isPlanningAssign && ticket.planningWorkerId) {
+            setPrimaryWorkerId(ticket.planningWorkerId);
+            setSupportWorkerIds([]);
+        } else if (isInstallationAssign && ticket.installationWorkerId) {
+            setPrimaryWorkerId(ticket.installationWorkerId);
+            setSupportWorkerIds([]);
+        } else if (ticket.assignments && ticket.assignments.length > 0) {
             const primary = ticket.assignments.find(a => a.isPrimary);
             const support = ticket.assignments.filter(a => !a.isPrimary).map(a => a.worker.id);
             setPrimaryWorkerId(primary?.worker.id || "");
@@ -873,6 +909,14 @@ const AdminDashboard = () => {
         if (!/^\d{10,}$/.test(cleanPhone)) {
             toast.error("Invalid phone number. Must be at least 10 digits.");
             return;
+        }
+
+        if (manualTicket.alternatePhone) {
+            const cleanAltPhone = manualTicket.alternatePhone.replace(/\s+/g, '').replace('+', '');
+            if (!/^\d{10,}$/.test(cleanAltPhone)) {
+                toast.error("Invalid alternate phone number. Must be at least 10 digits.");
+                return;
+            }
         }
 
         if (!manualTicket.title.trim() || !manualTicket.description.trim() || !manualTicket.clientName.trim()) {
@@ -1117,7 +1161,7 @@ const AdminDashboard = () => {
                                         <table className="w-full text-left text-sm">
                                             <thead className="border-b text-muted-foreground">
                                                 <tr>
-                                                    {["Client", "Type", "Status", "Address", "Assigned To", "Financials", "Assign"].map((h) => (
+                                                    {["Client & Phone", "Type", "Status", "Address", "Staff (Plan/Inst)", "Financials", "Assign"].map((h) => (
                                                         <th key={h} className="pb-3 pr-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
                                                     ))}
                                                 </tr>
@@ -1128,7 +1172,17 @@ const AdminDashboard = () => {
                                                         <td className="py-3 pr-4">
                                                             <div className="flex flex-col">
                                                                 <span className="text-xs font-black text-blue-600 uppercase tracking-tight">{t.clientName}</span>
-                                                                <span className="text-[10px] text-slate-800 font-bold line-clamp-1" title={t.title}>{t.title}</span>
+                                                                <div className="flex flex-col gap-0.5 mt-1 border-y border-slate-100 py-1">
+                                                                    <div className="flex items-center gap-1 text-[10px] font-bold text-slate-700">
+                                                                        <Phone className="h-3 w-3 text-success/70" /> {t.clientPhone}
+                                                                    </div>
+                                                                    {t.alternatePhone && (
+                                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                                                                            <Phone className="h-3 w-3 text-blue-400" /> {t.alternatePhone}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-800 font-bold line-clamp-1 mt-1" title={t.title}>{t.title}</span>
                                                                 <span className="text-[9px] text-muted-foreground font-medium mt-1">
                                                                     Created: <span className="text-foreground">{new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                                                                     <span className="ml-1 opacity-60">{new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
@@ -1170,23 +1224,27 @@ const AdminDashboard = () => {
                                                             </div>
                                                         </td>
                                                         <td className="py-3 pr-4">
-                                                            <div className="flex flex-col gap-0.5">
-                                                                {t.assignments && t.assignments.length > 0 ? (
-                                                                    <>
-                                                                        {t.assignments.filter(a => a.isPrimary).map(a => (
-                                                                            <span key={a.worker.id} className="font-bold text-success text-[11px] flex items-center gap-1">
-                                                                                <Users className="h-3 w-3" /> {a.worker.name}
-                                                                            </span>
-                                                                        ))}
-                                                                        {t.assignments.filter(a => !a.isPrimary).length > 0 && (
-                                                                            <span className="text-[10px] text-muted-foreground italic">
-                                                                                + {t.assignments.filter(a => !a.isPrimary).map(a => a.worker.name).join(', ')}
-                                                                            </span>
-                                                                        )}
-                                                                    </>
-                                                                ) : (
-                                                                    <span className="text-muted-foreground italic text-xs">Unassigned</span>
-                                                                )}
+                                                            <div className="flex flex-col gap-1.5">
+                                                                <div className="flex flex-col border-b border-secondary/20 pb-1">
+                                                                    <span className="text-[8px] font-black uppercase text-muted-foreground opacity-60">Planning</span>
+                                                                    {t.planningWorker ? (
+                                                                        <span className="font-bold text-indigo-600 text-[10px] flex items-center gap-1">
+                                                                            <Users className="h-3 w-3" /> {t.planningWorker.name}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[9px] text-muted-foreground italic">Pending</span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[8px] font-black uppercase text-muted-foreground opacity-60">Installation</span>
+                                                                    {t.installationWorker ? (
+                                                                        <span className="font-bold text-blue-600 text-[10px] flex items-center gap-1">
+                                                                            <CheckCircle2 className="h-3 w-3" /> {t.installationWorker.name}
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-[9px] text-muted-foreground italic">Pending</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </td>
                                                         <td className="py-3 pr-4">
@@ -1257,6 +1315,30 @@ const AdminDashboard = () => {
                                                                             >
                                                                                 <Users className="h-3 w-3 mr-1" />
                                                                                 Assign Team
+                                                                            </Button>
+                                                                        )}
+                                                                        {(t.status === "NEW" || t.status === "SITE_VISIT_ASSIGNED") && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[9px] font-black uppercase bg-indigo-600 hover:bg-indigo-700"
+                                                                                onClick={() => {
+                                                                                    setIsPlanningAssign(true);
+                                                                                    openAssignModal(t);
+                                                                                }}
+                                                                            >
+                                                                                Assign Planning
+                                                                            </Button>
+                                                                        )}
+                                                                        {(t.status === "SITE_VISIT_COMPLETED" || t.status === "INSTALLATION_ASSIGNED") && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[9px] font-black uppercase bg-blue-600 hover:bg-blue-700"
+                                                                                onClick={() => {
+                                                                                    setIsInstallationAssign(true);
+                                                                                    openAssignModal(t);
+                                                                                }}
+                                                                            >
+                                                                                Assign Work
                                                                             </Button>
                                                                         )}
                                                                         {t.status !== "COMPLETED" && (
@@ -2314,6 +2396,14 @@ const AdminDashboard = () => {
                                                             value={manualTicket.clientPhone}
                                                             onChange={e => setManualTicket(p => ({ ...p, clientPhone: e.target.value }))}
                                                             required
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs font-bold uppercase text-muted-foreground">Alternate Phone (Optional)</Label>
+                                                        <Input
+                                                            placeholder="Alternative 10 digit"
+                                                            value={manualTicket.alternatePhone}
+                                                            onChange={e => setManualTicket(p => ({ ...p, alternatePhone: e.target.value }))}
                                                         />
                                                     </div>
                                                 </div>
