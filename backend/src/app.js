@@ -28,14 +28,13 @@ const app = express();
 // Middleware
 app.use(express.json());
 
-const allowedOrigins = process.env.NODE_ENV === "production"
-    ? ["https://sree84s.site", "http://sree84s.site"]
-    : [
+const allowedOrigins =[
+        "https://sree84s.site",
+        "http://sree84s.site",
         "http://localhost:8080",
         "http://127.0.0.1:8080",
         "http://192.168.0.103:8080",
-        process.env.FRONTEND_URL
-    ];
+      ];
 
 app.use(cors({
     origin: function (origin, callback) {
