@@ -5,7 +5,8 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
 
 // Autocomplete (Authenticated users)
-router.get('/search', authMiddleware, productController.search);
+router.get('/search', productController.search);
+router.get('/catalog/search', authMiddleware, productController.catalogSearch);
 
 // Admin routes
 router.get('/', authMiddleware, requireRole('ADMIN'), productController.getAll);

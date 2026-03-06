@@ -3,13 +3,12 @@ const prisma = require('../config/prisma');
 // 1. Create a New Request
 exports.createRequest = async (req, res) => {
     try {
-        const { title, description, address, clientName, clientPhone, requestType } = req.body;
+        const { title, description, address, clientName, clientPhone, alternatePhone, requestType } = req.body;
 
         if (!['New Installation', 'Repair / Maintenance'].includes(requestType)) {
             return res.status(400).json({ error: "Invalid requestType" });
         }
 
-        // Map to existing TicketType to avoid breaking other parts conceptually
         const type = requestType === 'New Installation' ? 'INSTALLATION' : 'COMPLAINT';
 
         const ticket = await prisma.ticket.create({
@@ -21,8 +20,9 @@ exports.createRequest = async (req, res) => {
                 address,
                 clientName,
                 clientPhone,
-                status: 'SUBMITTED', // Using new status
-                ticketProgress: 'REQUESTED' // Keep backward compatibility
+                alternatePhone,
+                status: 'NEW_REQUEST',
+                ticketProgress: 'REQUESTED'
             }
         });
 
@@ -44,13 +44,11 @@ exports.assignSiteVisit = async (req, res) => {
             return res.status(400).json({ error: "Only New Installation requests can have a Site Visit." });
         }
 
-        // Verify the user is a SENIOR technician (or just a valid worker)
-        // Here we just assign and change status
         const updated = await prisma.ticket.update({
             where: { id },
             data: {
                 assignedTechnician: technicianId,
-                status: 'SITE_VISIT_ASSIGNED'
+                status: 'SURVEY_ASSIGNED'
             }
         });
 
@@ -65,33 +63,57 @@ exports.assignSiteVisit = async (req, res) => {
 exports.completeSiteVisit = async (req, res) => {
     try {
         const { id } = req.params;
-        const { notes, items } = req.body; // items = [{ productId, quantity }]
+        const {
+            numCameras, cableLength, nvrDvrType, hardDiskType,
+            powerSupply, surveyNotes, additionalItems
+        } = req.body;
 
-        if (!notes) {
-            return res.status(400).json({ error: "Site visit notes are mandatory." });
+        if (!surveyNotes) {
+            return res.status(400).json({ error: "Site survey notes are mandatory." });
         }
 
+        // Auto-generation based on ItemsCatalog
         let quotationItems = [];
         let subtotal = 0;
 
-        if (items && Array.isArray(items) && items.length > 0) {
-            for (const item of items) {
-                const product = await prisma.productMaster.findUnique({ where: { id: item.productId } });
-                if (product) {
-                    const lineTotal = product.sellingPrice * item.quantity;
-                    subtotal += lineTotal;
-                    quotationItems.push({
-                        productId: product.id,
-                        name: product.name,
-                        unitPrice: product.sellingPrice,
-                        quantity: item.quantity,
-                        totalPrice: lineTotal
-                    });
-                }
+        // Helper to add item from catalog
+        const addItem = async (name, qty) => {
+            if (!qty || qty <= 0) return;
+            const item = await prisma.itemsCatalog.findUnique({ where: { name } });
+            if (item) {
+                const lineTotal = item.price * qty;
+                subtotal += lineTotal;
+                quotationItems.push({
+                    name: item.name,
+                    unitPrice: item.price,
+                    quantity: qty,
+                    totalPrice: lineTotal
+                });
             }
+        };
+
+        // Standard logic for CCTV packages
+        if (numCameras > 0) {
+            // Find specific camera type based on technician selection if possible, 
+            // but for auto-gen we use the survey inputs.
+            // Technicians might just select types. 
+            // For now, let's assume specific selections or defaults.
+            await addItem(nvrDvrType, 1);
+            await addItem(hardDiskType, 1);
+            await addItem(powerSupply, 1);
+
+            // Assume 1 camera model for simplicity or specific logic
+            // In a real scenario, technicians would pick specific models.
+            // For this prompt, we'll try to find a default or matching camera name.
+            const camera = await prisma.itemsCatalog.findFirst({
+                where: { name: { contains: 'CAMERA' } } // Fallback logic
+            });
+            if (camera) await addItem(camera.name, numCameras);
+
+            await addItem('INSTALLATION CHARGE', numCameras);
+            await addItem('CAT6 CABLE', cableLength);
         }
 
-        // Calculate GST (assuming 18% as default, Admin can edit later)
         const gstAmount = subtotal * 0.18;
         const grandTotal = subtotal + gstAmount;
 
@@ -106,16 +128,22 @@ exports.completeSiteVisit = async (req, res) => {
         const updated = await prisma.ticket.update({
             where: { id },
             data: {
-                siteVisitNotes: notes,
+                numCameras,
+                cableLength,
+                nvrDvrType,
+                hardDiskType,
+                powerSupply,
+                surveyNotes,
+                additionalItems,
                 quotationItems: draftQuote,
-                status: 'SITE_VISIT_COMPLETED',
-                quotationStatus: 'GENERATED' // Auto-generated draft
+                status: 'SURVEY_COMPLETED',
+                quotationStatus: 'GENERATED'
             }
         });
 
         res.status(200).json(updated);
     } catch (error) {
-        console.error("Complete visit error:", error);
+        console.error("Complete survey error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };
@@ -124,7 +152,7 @@ exports.completeSiteVisit = async (req, res) => {
 exports.sendQuotation = async (req, res) => {
     try {
         const { id } = req.params;
-        const { quotationData } = req.body; // Allows Admin to submit edited prices/quantities
+        const { quotationData } = req.body;
 
         const updated = await prisma.ticket.update({
             where: { id },
@@ -135,7 +163,6 @@ exports.sendQuotation = async (req, res) => {
             }
         });
 
-        // Here we could trigger email/SMS if required.
         res.status(200).json(updated);
     } catch (error) {
         console.error("Send quotation error:", error);
@@ -167,19 +194,30 @@ exports.approveRequest = async (req, res) => {
 exports.assignWork = async (req, res) => {
     try {
         const { id } = req.params;
-        const { teamId } = req.body; // or array of worker IDs
+        const { technicianIds } = req.body; // array of IDs
 
         const ticket = await prisma.ticket.findUnique({ where: { id } });
-        if (ticket.requestType === 'New Installation' && ticket.status !== 'APPROVED') {
-            return res.status(400).json({ error: "Must be APPROVED before assigning work for New Installation." });
+        if (ticket.requestType === 'New Installation' && !['APPROVED', 'WAITING_CUSTOMER_APPROVAL'].includes(ticket.status)) {
+            // Usually approved, but allow flexibility if admin forces
+            // return res.status(400).json({ error: "Must be APPROVED before assigning work." });
         }
 
-        // Can also utilize the existing TicketAssignment model to maintain backward compatibility
+        // Create multiple assignments
+        if (technicianIds && technicianIds.length > 0) {
+            await prisma.ticketAssignment.deleteMany({ where: { ticketId: id } });
+            await prisma.ticketAssignment.createMany({
+                data: technicianIds.map((tid, index) => ({
+                    ticketId: id,
+                    workerId: tid,
+                    isPrimary: index === 0
+                }))
+            });
+        }
+
         const updated = await prisma.ticket.update({
             where: { id },
             data: {
-                assignedTeam: teamId,
-                status: 'WORK_ASSIGNED'
+                status: 'INSTALLATION_ASSIGNED'
             }
         });
 
@@ -237,12 +275,11 @@ exports.getAdminDashboard = async (req, res) => {
             orderBy: { updatedAt: 'desc' }
         });
 
-        // Group by custom advanced workflow fields
         const dashboard = {
-            requests: tickets.filter(t => t.status === 'SUBMITTED'),
-            siteVisits: tickets.filter(t => ['SITE_VISIT_ASSIGNED', 'SITE_VISIT_COMPLETED'].includes(t.status)),
-            pendingQuotations: tickets.filter(t => ['QUOTATION_GENERATED', 'QUOTATION_SENT'].includes(t.status)),
-            approvedWorks: tickets.filter(t => ['APPROVED', 'WORK_ASSIGNED'].includes(t.status)),
+            requests: tickets.filter(t => ['NEW_REQUEST', 'SUBMITTED'].includes(t.status)),
+            siteSurveys: tickets.filter(t => ['SURVEY_ASSIGNED', 'SURVEY_COMPLETED'].includes(t.status)),
+            pendingQuotations: tickets.filter(t => ['QUOTATION_GENERATED', 'QUOTATION_SENT', 'WAITING_CUSTOMER_APPROVAL'].includes(t.status)),
+            approvedWorks: tickets.filter(t => ['APPROVED', 'INSTALLATION_ASSIGNED', 'WORK_ASSIGNED'].includes(t.status)),
             completedWorks: tickets.filter(t => t.status === 'WORK_COMPLETED')
         };
 

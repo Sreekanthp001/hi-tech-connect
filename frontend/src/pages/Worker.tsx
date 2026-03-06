@@ -29,8 +29,8 @@ interface TicketRecord {
     latitude?: number;
     longitude?: number;
     type: string;
-    status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
-    ticketProgress?: "REQUESTED" | "ASSIGNED" | "ON_THE_WAY" | "IN_PROGRESS" | "COMPLETED";
+    status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "NEW_REQUEST" | "SURVEY_ASSIGNED" | "SURVEY_COMPLETED" | "QUOTATION_GENERATED" | "QUOTATION_SENT" | "WAITING_CUSTOMER_APPROVAL" | "APPROVED" | "INSTALLATION_ASSIGNED" | "WORK_ASSIGNED" | "WORK_COMPLETED";
+    ticketProgress?: "REQUESTED" | "ASSIGNED" | "ON_THE_WAY" | "IN_PROGRESS" | "COMPLETED" | "TESTING" | "WORKING";
     pendingNote?: string;
     createdAt: string;
     ticketPhotos?: TicketPhoto[];
@@ -38,12 +38,25 @@ interface TicketRecord {
         isPrimary: boolean;
         worker: { id: string; name: string }
     }[];
+    numCameras?: number;
+    cableLength?: number;
+    nvrDvrType?: string;
+    hardDiskType?: string;
+    powerSupply?: string;
+    surveyNotes?: string;
+    additionalItems?: string;
 }
 
 const STATUS_LABELS: Record<string, string> = {
     PENDING: "Pending",
     IN_PROGRESS: "In Progress",
     COMPLETED: "Completed",
+    NEW_REQUEST: "New Request",
+    SURVEY_ASSIGNED: "Survey Assigned",
+    SURVEY_COMPLETED: "Survey Done",
+    QUOTATION_SENT: "Quoted",
+    APPROVED: "Approved",
+    INSTALLATION_ASSIGNED: "Job Assigned",
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -82,6 +95,19 @@ const WorkerDashboard = () => {
     const [showPasswordModal, setShowPasswordModal] = useState(false);
     const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
     const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+    // Survey Modal State
+    const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
+    const [activeSurveyTicket, setActiveSurveyTicket] = useState<TicketRecord | null>(null);
+    const [surveyData, setSurveyData] = useState({
+        numCameras: "",
+        cableLength: "",
+        nvrDvrType: "",
+        hardDiskType: "",
+        powerSupply: "",
+        surveyNotes: "",
+        additionalItems: ""
+    });
 
     const fetchTickets = async () => {
         setIsLoading(true);
@@ -180,6 +206,32 @@ const WorkerDashboard = () => {
             }
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to update status.");
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const handleCompleteSurvey = async () => {
+        if (!activeSurveyTicket) return;
+        setUpdating(activeSurveyTicket.id);
+        try {
+            await apiFetch(`/worker/tickets/${activeSurveyTicket.id}/complete-survey`, {
+                method: "POST",
+                body: JSON.stringify({
+                    numCameras: parseInt(surveyData.numCameras),
+                    cableLength: parseInt(surveyData.cableLength),
+                    nvrDvrType: surveyData.nvrDvrType,
+                    hardDiskType: surveyData.hardDiskType,
+                    powerSupply: surveyData.powerSupply,
+                    surveyNotes: surveyData.surveyNotes,
+                    additionalItems: surveyData.additionalItems
+                }),
+            });
+            toast.success("Site survey completed!");
+            setIsSurveyModalOpen(false);
+            fetchTickets();
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to submit survey.");
         } finally {
             setUpdating(null);
         }
@@ -433,7 +485,30 @@ const WorkerDashboard = () => {
                                                     </Button>
                                                 )}
 
-                                                {task.status === "IN_PROGRESS" && (
+                                                {task.status === "SURVEY_ASSIGNED" && (
+                                                    <div className="flex flex-col gap-3">
+                                                        <Button
+                                                            className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold h-12 shadow-lg"
+                                                            onClick={() => {
+                                                                setActiveSurveyTicket(task);
+                                                                setSurveyData({
+                                                                    numCameras: task.numCameras?.toString() || "",
+                                                                    cableLength: task.cableLength?.toString() || "",
+                                                                    nvrDvrType: task.nvrDvrType || "",
+                                                                    hardDiskType: task.hardDiskType || "",
+                                                                    powerSupply: task.powerSupply || "",
+                                                                    surveyNotes: task.surveyNotes || "",
+                                                                    additionalItems: task.additionalItems || ""
+                                                                });
+                                                                setIsSurveyModalOpen(true);
+                                                            }}
+                                                        >
+                                                            Start Site Survey
+                                                        </Button>
+                                                    </div>
+                                                )}
+
+                                                {(task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED") && (
                                                     <>
                                                         <Button
                                                             variant="outline"
@@ -470,6 +545,31 @@ const WorkerDashboard = () => {
                                                             Complete Job
                                                         </Button>
                                                     </>
+                                                )}
+
+                                                {(task.status === "IN_PROGRESS" || task.status === "PENDING") && task.status !== "SURVEY_ASSIGNED" && task.status !== "INSTALLATION_ASSIGNED" && (
+                                                    <div className="flex flex-col sm:flex-row gap-3">
+                                                        {task.status === "PENDING" && (
+                                                            <Button
+                                                                variant="outline"
+                                                                className="flex-1 font-bold border-2 hover:bg-blue-600 hover:text-white transition-all h-12"
+                                                                onClick={() => handleStatusUpdate(task.id, "IN_PROGRESS")}
+                                                                disabled={updating === task.id}
+                                                            >
+                                                                Resume Work
+                                                            </Button>
+                                                        )}
+                                                        {task.status === "IN_PROGRESS" && (
+                                                            <Button
+                                                                variant="outline"
+                                                                className="flex-1 font-bold border-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 transition-all h-12"
+                                                                onClick={() => setPendingModalTicket(task)}
+                                                                disabled={updating === task.id}
+                                                            >
+                                                                Mark Pending
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 )}
 
                                                 {task.status === "COMPLETED" && (
@@ -788,6 +888,127 @@ const WorkerDashboard = () => {
                                         {isChangingPassword ? "Updating..." : "Update Password"}
                                     </Button>
                                 </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Site Survey Modal */}
+            {isSurveyModalOpen && activeSurveyTicket && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                    <Card className="w-full max-w-lg shadow-2xl relative border-none max-h-[90vh] overflow-y-auto">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-4 top-4 z-10"
+                            onClick={() => setIsSurveyModalOpen(false)}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+
+                        <CardHeader className="bg-purple-50 border-b border-purple-100 rounded-t-xl sticky top-0 z-20">
+                            <CardTitle className="text-xl font-black flex items-center gap-2 text-purple-800">
+                                <MapPin className="h-6 w-6" /> Site Survey Input
+                            </CardTitle>
+                            <CardDescription className="text-purple-700 font-medium italic">Enter site requirements for {activeSurveyTicket.clientName}</CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="p-6">
+                            <form onSubmit={(e) => { e.preventDefault(); handleCompleteSurvey(); }} className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Number of Cameras</Label>
+                                        <Input
+                                            type="number"
+                                            placeholder="e.g. 4"
+                                            value={surveyData.numCameras}
+                                            onChange={(e) => setSurveyData({ ...surveyData, numCameras: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Cable Length (Meters)</Label>
+                                        <Input
+                                            type="number"
+                                            placeholder="e.g. 90"
+                                            value={surveyData.cableLength}
+                                            onChange={(e) => setSurveyData({ ...surveyData, cableLength: e.target.value })}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">NVR / DVR Type</Label>
+                                        <select
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            value={surveyData.nvrDvrType}
+                                            onChange={(e) => setSurveyData({ ...surveyData, nvrDvrType: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Type...</option>
+                                            <option value="4 CHANNEL NVR">4 Channel NVR</option>
+                                            <option value="8 CHANNEL NVR">8 Channel NVR</option>
+                                            <option value="16 CHANNEL NVR">16 Channel NVR</option>
+                                            <option value="4 CHANNEL DVR">4 Channel DVR</option>
+                                            <option value="8 CHANNEL DVR">8 Channel DVR</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Hard Disk (HDD)</Label>
+                                        <select
+                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                            value={surveyData.hardDiskType}
+                                            onChange={(e) => setSurveyData({ ...surveyData, hardDiskType: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Select Capacity...</option>
+                                            <option value="1TB HDD">1TB HDD</option>
+                                            <option value="2TB HDD">2TB HDD</option>
+                                            <option value="4TB HDD">4TB HDD</option>
+                                            <option value="500GB HDD">500GB HDD</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Power Supply</Label>
+                                    <Input
+                                        placeholder="e.g. 4 Port / 8 Port / PoE Switch"
+                                        value={surveyData.powerSupply}
+                                        onChange={(e) => setSurveyData({ ...surveyData, powerSupply: e.target.value })}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Survey Notes</Label>
+                                    <textarea
+                                        className="w-full min-h-[100px] rounded-lg border-2 border-slate-200 p-3 text-sm focus:border-purple-500 outline-none"
+                                        placeholder="Mention site difficulties, height, extra materials..."
+                                        value={surveyData.surveyNotes}
+                                        onChange={(e) => setSurveyData({ ...surveyData, surveyNotes: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label className="text-[10px] font-black uppercase text-accent tracking-widest">Additional Items (Optional)</Label>
+                                    <Input
+                                        placeholder="e.g. Rack, HDMI Cable, Monitor"
+                                        value={surveyData.additionalItems}
+                                        onChange={(e) => setSurveyData({ ...surveyData, additionalItems: e.target.value })}
+                                    />
+                                </div>
+
+                                <Button
+                                    type="submit"
+                                    className="w-full h-12 bg-purple-600 hover:bg-purple-700 font-bold shadow-lg mt-2"
+                                    disabled={updating === activeSurveyTicket.id}
+                                >
+                                    {updating === activeSurveyTicket.id ? "Submitting..." : "Submit Site Survey"}
+                                </Button>
                             </form>
                         </CardContent>
                     </Card>

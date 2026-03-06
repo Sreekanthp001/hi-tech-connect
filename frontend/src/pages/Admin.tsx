@@ -35,7 +35,16 @@ interface TicketRecord {
     description: string;
     clientName: string;
     type: string;
-    status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
+    status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "NEW_REQUEST" | "SURVEY_ASSIGNED" | "SURVEY_COMPLETED" | "QUOTATION_GENERATED" | "QUOTATION_SENT" | "WAITING_CUSTOMER_APPROVAL" | "APPROVED" | "INSTALLATION_ASSIGNED" | "WORK_ASSIGNED" | "WORK_COMPLETED";
+    requestType?: string;
+    alternatePhone?: string;
+    numCameras?: number;
+    cableLength?: number;
+    nvrDvrType?: string;
+    hardDiskType?: string;
+    powerSupply?: string;
+    surveyNotes?: string;
+    additionalItems?: string;
     address: string;
     latitude?: number;
     longitude?: number;
@@ -53,6 +62,8 @@ interface TicketRecord {
     payments?: any[];
     invoice?: { id: string; invoiceNumber: string } | null;
     ticketPhotos?: TicketPhoto[];
+    quotationItems?: any;
+    quotationStatus?: string;
     createdAt: string;
 }
 
@@ -117,6 +128,16 @@ const STATUS_LABELS: Record<string, string> = {
     PENDING: "Pending",
     IN_PROGRESS: "In Progress",
     COMPLETED: "Completed",
+    NEW_REQUEST: "New Request",
+    SURVEY_ASSIGNED: "Survey Assigned",
+    SURVEY_COMPLETED: "Survey Completed",
+    QUOTATION_GENERATED: "Quote Drafted",
+    QUOTATION_SENT: "Quote Sent",
+    WAITING_CUSTOMER_APPROVAL: "Waiting Approval",
+    APPROVED: "Approved",
+    INSTALLATION_ASSIGNED: "Installation Assigned",
+    WORK_ASSIGNED: "Work Started",
+    WORK_COMPLETED: "Finished",
 };
 
 // ─── StatusBadge ────────────────────────────────────────────────────────────
@@ -126,6 +147,12 @@ const StatusBadge = ({ status }: { status: string }) => {
         "PENDING": "bg-yellow-100 text-yellow-700 border-yellow-200 font-bold px-2 py-0.5",
         "IN_PROGRESS": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
         "COMPLETED": "bg-green-100 text-green-700 border-green-200 font-bold px-2 py-0.5",
+        "NEW_REQUEST": "bg-purple-100 text-purple-700 border-purple-200 font-bold px-2 py-0.5",
+        "SURVEY_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5",
+        "SURVEY_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold px-2 py-0.5",
+        "QUOTATION_SENT": "bg-orange-100 text-orange-700 border-orange-200 font-bold px-2 py-0.5",
+        "APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold px-2 py-0.5",
+        "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
     };
     return (
         <Badge variant="outline" className={styles[status] || ""}>
@@ -230,6 +257,12 @@ const AdminDashboard = () => {
     // Notifications state
     const [notifications, setNotifications] = useState<any[]>([]);
     const [notifLoading, setNotifLoading] = useState(false);
+
+    // CCTV Workflow Modals
+    const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
+    const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+    const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
+    const [catalogResults, setCatalogResults] = useState<any[]>([]);
 
     const fetchNotifications = async () => {
         setNotifLoading(true);
@@ -350,6 +383,7 @@ const AdminDashboard = () => {
     const [activeAssignTicket, setActiveAssignTicket] = useState<TicketRecord | null>(null);
     const [primaryWorkerId, setPrimaryWorkerId] = useState("");
     const [supportWorkerIds, setSupportWorkerIds] = useState<string[]>([]);
+    const [isSurveyAssign, setIsSurveyAssign] = useState(false);
 
 
     // ── Data fetchers ──────────────────────────────────────────────────────
@@ -612,18 +646,93 @@ const AdminDashboard = () => {
 
         setAssigning(ticketId);
         try {
-            await apiFetch(`/admin/assign/${ticketId}`, {
+            const endpoint = isSurveyAssign ? `/admin/assign-survey/${ticketId}` : `/admin/assign/${ticketId}`;
+            await apiFetch(endpoint, {
                 method: "PATCH",
                 body: JSON.stringify(payload),
             });
-            toast.success("Workers assigned successfully!");
+            toast.success(isSurveyAssign ? "Survey technician assigned!" : "Workers assigned successfully!");
             closeAssignModal();
             fetchTickets();
             fetchPerf();
         } catch (err: any) {
-            toast.error(err.response?.data?.error || "Failed to assign workers.");
+            toast.error(err.response?.data?.error || "Failed to assign.");
         } finally {
             setAssigning(null);
+            setIsSurveyAssign(false);
+        }
+    };
+
+    const handleCatalogSearch = async (query: string) => {
+        if (!query || query.length < 2) {
+            setCatalogResults([]);
+            return;
+        }
+        try {
+            const res = await apiFetch(`/catalog/search?q=${query}`);
+            const data = await res.json();
+            setCatalogResults(data);
+        } catch (err) {
+            console.error("Search error:", err);
+        }
+    };
+
+    const addQuotationItem = (catalogItem: any) => {
+        if (!selectedTicket) return;
+        const newItem = {
+            id: catalogItem.id,
+            name: catalogItem.name,
+            quantity: 1,
+            unitPrice: catalogItem.price,
+            unit: catalogItem.unit,
+            total: catalogItem.price
+        };
+        const updatedItems = [...(selectedTicket.quotationItems || []), newItem];
+        setSelectedTicket({ ...selectedTicket, quotationItems: updatedItems });
+        setCatalogResults([]);
+    };
+
+    const updateQuoteItem = (index: number, field: string, value: any) => {
+        if (!selectedTicket || !selectedTicket.quotationItems) return;
+        const items = [...selectedTicket.quotationItems];
+        if (field === "quantity") {
+            items[index].quantity = parseFloat(value) || 0;
+        } else if (field === "unitPrice") {
+            items[index].unitPrice = parseFloat(value) || 0;
+        }
+        items[index].total = items[index].quantity * items[index].unitPrice;
+        setSelectedTicket({ ...selectedTicket, quotationItems: items });
+    };
+
+    const removeQuotationItem = (index: number) => {
+        if (!selectedTicket || !selectedTicket.quotationItems) return;
+        const items = selectedTicket.quotationItems.filter((_: any, i: number) => i !== index);
+        setSelectedTicket({ ...selectedTicket, quotationItems: items });
+    };
+
+    const calculateQuoteTotal = () => {
+        if (!selectedTicket || !selectedTicket.quotationItems) return 0;
+        return selectedTicket.quotationItems.reduce((acc: number, item: any) => acc + item.total, 0);
+    };
+
+    const handleSendQuotation = async () => {
+        if (!selectedTicket) return;
+        setIsLoading(true);
+        try {
+            await apiFetch(`/admin/send-quotation/${selectedTicket.id}`, {
+                method: "POST",
+                body: JSON.stringify({
+                    items: selectedTicket.quotationItems,
+                    totalAmount: calculateQuoteTotal()
+                })
+            });
+            toast.success("Quotation updated and sent to customer!");
+            setIsQuoteModalOpen(false);
+            fetchTickets();
+        } catch (err) {
+            toast.error("Failed to send quotation.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -822,15 +931,19 @@ const AdminDashboard = () => {
 
     // ── Derived stats ──────────────────────────────────────────────────────
 
-    const pendingCount = tickets.filter((t) => t.status === "PENDING").length;
-    const inProgressCount = tickets.filter((t) => t.status === "IN_PROGRESS").length;
-    const completedCount = tickets.filter((t) => t.status === "COMPLETED").length;
-
     const statusData = [
-        { name: "Pending", value: pendingCount, color: "#f59e0b" },
-        { name: "In Progress", value: inProgressCount, color: "#2563eb" },
-        { name: "Completed", value: completedCount, color: "#10b981" },
+        { name: "New Req", value: tickets.filter(t => t.status === "NEW_REQUEST").length, color: "#a855f7" },
+        { name: "Survey", value: tickets.filter(t => t.status === "SURVEY_ASSIGNED" || t.status === "SURVEY_COMPLETED").length, color: "#6366f1" },
+        { name: "Quoted", value: tickets.filter(t => t.status === "QUOTATION_SENT" || t.status === "QUOTATION_GENERATED").length, color: "#f97316" },
+        { name: "Approved", value: tickets.filter(t => t.status === "APPROVED").length, color: "#10b981" },
+        { name: "In Progress", value: tickets.filter(t => t.status === "INSTALLATION_ASSIGNED" || t.status === "WORK_ASSIGNED").length, color: "#3b82f6" },
+        { name: "Completed", value: tickets.filter(t => t.status === "COMPLETED").length, color: "#22c55e" },
     ];
+    // Follow-up Alerts Logic
+    const followUpTickets = tickets.filter(t =>
+        t.status === "QUOTATION_SENT" &&
+        (new Date().getTime() - new Date(t.createdAt).getTime() > 24 * 60 * 60 * 1000)
+    );
 
     // ── Render ─────────────────────────────────────────────────────────────
 
@@ -863,6 +976,26 @@ const AdminDashboard = () => {
                 </div>
 
                 {/* Stats Overview */}
+                {/* Alerts & Follow-ups */}
+                {followUpTickets.length > 0 && (
+                    <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl flex items-center justify-between animate-pulse">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 bg-orange-100 rounded-full flex items-center justify-center">
+                                <BellRing className="h-5 w-5 text-orange-600" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black text-orange-900 uppercase tracking-widest">Follow-up Required</p>
+                                <p className="text-[11px] text-orange-700 font-bold">
+                                    {followUpTickets.length} quotations are pending for more than 24 hours. Contact customers for approval.
+                                </p>
+                            </div>
+                        </div>
+                        <Button variant="ghost" className="text-orange-600 font-black text-[10px] uppercase hover:bg-orange-100" onClick={() => setActiveTab("tickets")}>
+                            View Tickets
+                        </Button>
+                    </div>
+                )}
+
                 <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5 stagger-fade-in">
                     {[
                         { label: "Total Tickets", value: stats.totalTickets, icon: Ticket, color: "text-accent" },
@@ -1088,28 +1221,56 @@ const AdminDashboard = () => {
                                                                     </Button>
                                                                 )}
                                                                 {t.status !== "COMPLETED" && (
-                                                                    <>
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="outline"
-                                                                            className="h-8 text-[10px] px-3 font-bold border-primary/30 hover:bg-primary/10 text-primary"
-                                                                            onClick={() => openAssignModal(t)}
-                                                                            loading={assigning === t.id}
-                                                                            disabled={assigning === t.id}
-                                                                        >
-                                                                            <Users className="h-3 w-3 mr-1" />
-                                                                            Assign Team
-                                                                        </Button>
-                                                                        <Button
-                                                                            size="sm"
-                                                                            variant="ghost"
-                                                                            className="h-8 w-8 text-green-600 hover:bg-green-50 p-0"
-                                                                            onClick={() => handleAdminComplete(t)}
-                                                                            title="Mark Complete"
-                                                                        >
-                                                                            <CheckCircle2 className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </>
+                                                                    <div className="flex gap-2">
+                                                                        {t.status === "NEW_REQUEST" && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[10px] font-bold bg-purple-600 hover:bg-purple-700"
+                                                                                onClick={() => {
+                                                                                    setIsSurveyAssign(true);
+                                                                                    openAssignModal(t);
+                                                                                }}
+                                                                            >
+                                                                                Assign Survey
+                                                                            </Button>
+                                                                        )}
+                                                                        {(t.status === "SURVEY_COMPLETED" || t.status === "QUOTATION_SENT") && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[10px] font-bold bg-orange-600 hover:bg-orange-700"
+                                                                                onClick={() => {
+                                                                                    setSelectedTicket(t);
+                                                                                    setIsQuoteModalOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                Edit Quote
+                                                                            </Button>
+                                                                        )}
+                                                                        {t.status === "APPROVED" && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                className="h-8 text-[10px] px-3 font-bold border-primary/30 hover:bg-primary/10 text-primary"
+                                                                                onClick={() => openAssignModal(t)}
+                                                                                loading={assigning === t.id}
+                                                                                disabled={assigning === t.id}
+                                                                            >
+                                                                                <Users className="h-3 w-3 mr-1" />
+                                                                                Assign Team
+                                                                            </Button>
+                                                                        )}
+                                                                        {t.status !== "COMPLETED" && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                className="h-8 w-8 text-green-600 hover:bg-green-50 p-0"
+                                                                                onClick={() => handleAdminComplete(t)}
+                                                                                title="Mark Complete"
+                                                                            >
+                                                                                <CheckCircle2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
                                                                 )}
                                                                 {t.status === "COMPLETED" && (
                                                                     <div className="flex items-center gap-1">

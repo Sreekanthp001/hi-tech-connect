@@ -24,6 +24,7 @@ const TicketForm = () => {
         longitude: null as number | null,
         clientName: "",
         clientPhone: "",
+        alternatePhone: "",
         clientEmail: "",
     });
     const [isLoading, setIsLoading] = useState(false);
@@ -79,6 +80,7 @@ const TicketForm = () => {
                 longitude: null,
                 clientName: "",
                 clientPhone: "",
+                alternatePhone: "",
                 clientEmail: "",
             });
             setTimeout(() => setSubmitted(false), 5000);
@@ -247,6 +249,18 @@ const TicketForm = () => {
                                                 value={form.clientPhone}
                                                 onChange={handleChange}
                                                 required
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="alternatePhone" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Alternate Phone</Label>
+                                            <Input
+                                                id="alternatePhone"
+                                                name="alternatePhone"
+                                                type="tel"
+                                                placeholder="+91 (Optional)"
+                                                className="h-12 border-gray-200"
+                                                value={form.alternatePhone}
+                                                onChange={handleChange}
                                             />
                                         </div>
                                     </div>

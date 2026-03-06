@@ -5,6 +5,7 @@ const adminController = require('../controllers/adminController');
 const authMiddleware = require('../middleware/authMiddleware');
 const { requireRole } = require('../middleware/roleMiddleware');
 const workerFinanceController = require('../controllers/workerFinanceController');
+const workflowController = require('../controllers/workflowController');
 
 router.use(authMiddleware);
 router.use(requireRole('ADMIN'));
@@ -16,6 +17,8 @@ router.patch('/assign/:ticketId', ticketController.assignWorker);
 router.patch('/tickets/:ticketId/status', ticketController.adminUpdateStatus);
 router.post('/tickets/:ticketId/add-payment', ticketController.addPayment);
 router.delete('/tickets/:id', ticketController.deleteTicket);
+router.post('/assign-survey/:id', workflowController.assignSiteVisit);
+router.post('/send-quotation/:id', workflowController.sendQuotation);
 
 // Ticket history / timeline
 router.get('/ticket/:id/history', ticketController.getTicketHistory);

@@ -22,11 +22,14 @@ enum TicketStatus {
   IN_PROGRESS
   COMPLETED
   SUBMITTED
-  SITE_VISIT_ASSIGNED
-  SITE_VISIT_COMPLETED
+  NEW_REQUEST
+  SURVEY_ASSIGNED
+  SURVEY_COMPLETED
   QUOTATION_GENERATED
   QUOTATION_SENT
+  WAITING_CUSTOMER_APPROVAL
   APPROVED
+  INSTALLATION_ASSIGNED
   WORK_ASSIGNED
   WORK_COMPLETED
 }
@@ -95,7 +98,18 @@ model Ticket {
 
   // Advanced Workflow Fields
   requestType        String? // "New Installation", "Repair / Maintenance"
+  alternatePhone     String?
   siteVisitNotes     String?
+  
+  // Site Survey Details
+  numCameras         Int?
+  cableLength        Float?
+  nvrDvrType         String?
+  hardDiskType       String?
+  powerSupply        String?
+  surveyNotes        String?
+  additionalItems    String?
+
   quotationItems     Json?
   quotationStatus    String?
   assignedTechnician String?
@@ -258,6 +272,16 @@ model ProductMaster {
 
   items        QuotationItem[]
   transactions StockTransaction[]
+}
+
+model ItemsCatalog {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  price     Float
+  unit      String
+  category  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum TransactionType {

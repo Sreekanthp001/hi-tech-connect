@@ -31,6 +31,28 @@ exports.search = async (req, res) => {
     }
 };
 
+// Autocomplete search for ItemsCatalog (Admin only)
+exports.catalogSearch = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q || q.length < 1) {
+            return res.status(200).json([]);
+        }
+
+        const items = await prisma.itemsCatalog.findMany({
+            where: {
+                name: { contains: q, mode: 'insensitive' }
+            },
+            take: 10
+        });
+
+        res.status(200).json(items);
+    } catch (error) {
+        console.error("Catalog search error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
 // Get all products (Admin)
 exports.getAll = async (req, res) => {
     try {

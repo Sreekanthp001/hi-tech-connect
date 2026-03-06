@@ -4,6 +4,7 @@ const telegramService = require('../services/telegramService');
 const invoiceService = require('../services/invoiceService');
 const path = require('path');
 const fs = require('fs');
+const sharp = require('sharp');
 
 const distributeWorkerSalary = async (ticketId, totalAmount) => {
     try {
@@ -680,8 +681,27 @@ exports.uploadTicketPhoto = async (req, res) => {
             return res.status(400).json({ error: "No image file provided" });
         }
 
+        // Generate a unique filename (moved from middleware to here since we use memoryStorage)
+        const timestamp = Date.now();
+        const ext = '.jpg'; // Store everything as optimized jpg
+        const filename = `${id}-${type.toLowerCase()}-${timestamp}${ext}`;
+        const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'tickets');
+        const outputPath = path.join(uploadDir, filename);
+
+        // Ensure upload directory exists
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        // Process image with Sharp: resize to max width 1280, compress to 75% quality
+        // If the file is small (< 500KB), we might skip resizing but the user wants optimization for all
+        await sharp(req.file.buffer)
+            .resize({ width: 1280, withoutEnlargement: true, fit: 'inside' })
+            .jpeg({ quality: 75 })
+            .toFile(outputPath);
+
         // Relative path for storage, frontend will use /uploads prefix
-        const imageUrl = `/uploads/tickets/${req.file.filename}`;
+        const imageUrl = `/uploads/tickets/${filename}`;
 
         const photo = await prisma.ticketPhoto.create({
             data: {
