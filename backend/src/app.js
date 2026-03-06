@@ -80,6 +80,7 @@ app.use('/api/leads', leadRoutes);
 app.use('/api/installations', installationRoutes);
 app.use('/api/workflow', workflowRoutes);
 app.get('/api/catalog/search', authMiddleware, productController.catalogSearch);
+app.get('/api/items/search', authMiddleware, productController.catalogSearch);
 
 // Error handling middleware (optional but recommended)
 app.use((err, req, res, next) => {

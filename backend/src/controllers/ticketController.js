@@ -91,7 +91,7 @@ exports.createTicket = async (req, res) => {
                 clientEmail,
                 requestType,
                 alternatePhone,
-                status: 'NEW',
+                status: 'NEW_REQUEST',
                 quotationStatus: 'NONE'
             }
         });
@@ -615,8 +615,9 @@ exports.assignPlanningWorker = async (req, res) => {
             data: {
                 userId: workerId,
                 title: "New Job Assigned",
-                message: "You have been assigned a new service ticket.",
-                type: "JOB_ASSIGNED"
+                message: "You have been assigned for Site Survey / Planning.",
+                type: "JOB_ASSIGNED",
+                ticketId: id
             }
         });
 
@@ -648,8 +649,9 @@ exports.assignInstallationWorker = async (req, res) => {
             data: {
                 userId: workerId,
                 title: "New Job Assigned",
-                message: "You have been assigned a new service ticket.",
-                type: "JOB_ASSIGNED"
+                message: "You have been assigned for Installation Work.",
+                type: "JOB_ASSIGNED",
+                ticketId: id
             }
         });
 
@@ -935,7 +937,11 @@ exports.updateQuotation = async (req, res) => {
 
             return await tx.ticket.update({
                 where: { id },
-                data: { totalAmount: total }
+                data: {
+                    totalAmount: total,
+                    status: 'QUOTATION_SENT',
+                    quotationStatus: 'SENT'
+                }
             });
         });
 
@@ -986,8 +992,8 @@ exports.handleCustomerAction = async (req, res) => {
         const updatedTicket = await prisma.ticket.update({
             where: { id },
             data: {
-                status: status,
-                quotationStatus: qStatus
+                status: action === 'APPROVE' ? 'APPROVED' : 'SURVEY_COMPLETED',
+                quotationStatus: action === 'APPROVE' ? 'APPROVED' : 'REJECTED'
             }
         });
 

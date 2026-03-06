@@ -47,8 +47,18 @@ exports.assignSiteVisit = async (req, res) => {
         const updated = await prisma.ticket.update({
             where: { id },
             data: {
-                assignedTechnician: technicianId,
+                planningWorkerId: technicianId,
                 status: 'SURVEY_ASSIGNED'
+            }
+        });
+
+        await prisma.notification.create({
+            data: {
+                userId: technicianId,
+                title: "New Job Assigned",
+                message: "You have been assigned for Site Survey / Planning.",
+                type: "JOB_ASSIGNED",
+                ticketId: id
             }
         });
 
@@ -94,24 +104,35 @@ exports.completeSiteVisit = async (req, res) => {
 
         // Standard logic for CCTV packages
         if (numCameras > 0) {
-            // Find specific camera type based on technician selection if possible, 
-            // but for auto-gen we use the survey inputs.
-            // Technicians might just select types. 
-            // For now, let's assume specific selections or defaults.
-            await addItem(nvrDvrType, 1);
-            await addItem(hardDiskType, 1);
-            await addItem(powerSupply, 1);
-
-            // Assume 1 camera model for simplicity or specific logic
-            // In a real scenario, technicians would pick specific models.
-            // For this prompt, we'll try to find a default or matching camera name.
-            const camera = await prisma.itemsCatalog.findFirst({
-                where: { name: { contains: 'CAMERA' } } // Fallback logic
+            // 1. Map Cameras
+            // Try to find a default camera or one containing 'CAMERA'
+            const defaultCamera = await prisma.itemsCatalog.findFirst({
+                where: { name: { contains: 'CAMERA', mode: 'insensitive' } }
             });
-            if (camera) await addItem(camera.name, numCameras);
+            if (defaultCamera) {
+                await addItem(defaultCamera.name, Number(numCameras));
+            }
 
-            await addItem('INSTALLATION CHARGE', numCameras);
-            await addItem('CAT6 CABLE', cableLength);
+            // 2. Map Cable
+            const defaultCable = await prisma.itemsCatalog.findFirst({
+                where: { name: { contains: 'CAT6', mode: 'insensitive' } }
+            });
+            if (defaultCable) {
+                await addItem(defaultCable.name, Number(cableLength));
+            }
+
+            // 3. Map Accessories (Exact matches from tech selection)
+            if (nvrDvrType) await addItem(nvrDvrType, 1);
+            if (hardDiskType) await addItem(hardDiskType, 1);
+            if (powerSupply) await addItem(powerSupply, 1);
+
+            // 4. Installation Charges
+            const installCharge = await prisma.itemsCatalog.findFirst({
+                where: { name: { contains: 'INSTALLATION', mode: 'insensitive' } }
+            });
+            if (installCharge) {
+                await addItem(installCharge.name, Number(numCameras));
+            }
         }
 
         const gstAmount = subtotal * 0.18;
@@ -125,17 +146,29 @@ exports.completeSiteVisit = async (req, res) => {
             grandTotal
         };
 
+        // Create TicketItems in the database for the generated quotation
+        await prisma.ticketItem.deleteMany({ where: { ticketId: id } });
+        await prisma.ticketItem.createMany({
+            data: quotationItems.map(item => ({
+                ticketId: id,
+                itemName: item.name,
+                quantity: item.quantity,
+                price: item.unitPrice
+            }))
+        });
+
         const updated = await prisma.ticket.update({
             where: { id },
             data: {
-                numCameras,
-                cableLength,
+                numCameras: Number(numCameras),
+                cableLength: Number(cableLength),
                 nvrDvrType,
                 hardDiskType,
                 powerSupply,
                 surveyNotes,
                 additionalItems,
                 quotationItems: draftQuote,
+                totalAmount: grandTotal,
                 status: 'SURVEY_COMPLETED',
                 quotationStatus: 'GENERATED'
             }

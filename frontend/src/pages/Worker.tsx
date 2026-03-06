@@ -53,10 +53,12 @@ const STATUS_LABELS: Record<string, string> = {
     COMPLETED: "Completed",
     NEW: "New Service Request",
     NEW_REQUEST: "New Request",
-    SITE_VISIT_ASSIGNED: "Survey Assigned",
-    SITE_VISIT_COMPLETED: "Survey Done",
-    INSTALLATION_APPROVED: "Approved",
+    SURVEY_ASSIGNED: "Survey Assigned",
+    SURVEY_COMPLETED: "Survey Done",
+    QUOTATION_SENT: "Quotation Sent",
+    APPROVED: "Approved",
     INSTALLATION_ASSIGNED: "Job Assigned",
+    WORK_COMPLETED: "Work Completed",
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -65,10 +67,13 @@ const StatusBadge = ({ status }: { status: string }) => {
         "IN_PROGRESS": "bg-blue-100 text-blue-700 border-blue-200 font-bold",
         "COMPLETED": "bg-green-100 text-green-700 border-green-200 font-bold",
         "NEW": "bg-purple-100 text-purple-700 border-purple-200 font-bold",
-        "SITE_VISIT_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold",
-        "SITE_VISIT_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold",
-        "INSTALLATION_APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold",
+        "NEW_REQUEST": "bg-purple-100 text-purple-700 border-purple-200 font-bold",
+        "SURVEY_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold",
+        "SURVEY_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold",
+        "QUOTATION_SENT": "bg-blue-100 text-blue-700 border-blue-200 font-bold",
+        "APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold",
         "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold",
+        "WORK_COMPLETED": "bg-green-100 text-green-700 border-green-200 font-bold",
     };
     return (
         <Badge variant="outline" className={`${styles[status] || ""}`}>

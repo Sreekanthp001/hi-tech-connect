@@ -277,6 +277,8 @@ const AdminDashboard = () => {
     const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
     const [catalogResults, setCatalogResults] = useState<any[]>([]);
+    const [itemSearchQuery, setItemSearchQuery] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
     const fetchNotifications = async () => {
         setNotifLoading(true);
@@ -699,14 +701,14 @@ const AdminDashboard = () => {
     };
 
     const handleCatalogSearch = async (query: string) => {
+        setItemSearchQuery(query);
         if (!query || query.length < 2) {
             setCatalogResults([]);
             return;
         }
         try {
-            const res = await apiFetch(`/catalog/search?q=${query}`);
-            const data = await res.json();
-            setCatalogResults(data);
+            const res = await apiFetch(`/items/search?q=${query}`);
+            setCatalogResults(res.data);
         } catch (err) {
             console.error("Search error:", err);
         }
@@ -715,50 +717,46 @@ const AdminDashboard = () => {
     const addQuotationItem = (catalogItem: any) => {
         if (!selectedTicket) return;
         const newItem = {
-            id: catalogItem.id,
-            name: catalogItem.name,
+            itemName: catalogItem.name,
             quantity: 1,
-            unitPrice: catalogItem.price,
-            unit: catalogItem.unit,
-            total: catalogItem.price
+            price: catalogItem.price,
         };
-        const updatedItems = [...(selectedTicket.quotationItems || []), newItem];
-        setSelectedTicket({ ...selectedTicket, quotationItems: updatedItems });
+        const updatedItems = [...(selectedTicket.items || []), newItem];
+        setSelectedTicket({ ...selectedTicket, items: updatedItems });
+        setItemSearchQuery("");
         setCatalogResults([]);
     };
 
     const updateQuoteItem = (index: number, field: string, value: any) => {
-        if (!selectedTicket || !selectedTicket.quotationItems) return;
-        const items = [...selectedTicket.quotationItems];
+        if (!selectedTicket || !selectedTicket.items) return;
+        const items = [...selectedTicket.items];
         if (field === "quantity") {
-            items[index].quantity = parseFloat(value) || 0;
-        } else if (field === "unitPrice") {
-            items[index].unitPrice = parseFloat(value) || 0;
+            items[index].quantity = parseInt(value) || 0;
+        } else if (field === "price") {
+            items[index].price = parseFloat(value) || 0;
         }
-        items[index].total = items[index].quantity * items[index].unitPrice;
-        setSelectedTicket({ ...selectedTicket, quotationItems: items });
+        setSelectedTicket({ ...selectedTicket, items });
     };
 
     const removeQuotationItem = (index: number) => {
-        if (!selectedTicket || !selectedTicket.quotationItems) return;
-        const items = selectedTicket.quotationItems.filter((_: any, i: number) => i !== index);
-        setSelectedTicket({ ...selectedTicket, quotationItems: items });
+        if (!selectedTicket || !selectedTicket.items) return;
+        const items = selectedTicket.items.filter((_: any, i: number) => i !== index);
+        setSelectedTicket({ ...selectedTicket, items });
     };
 
     const calculateQuoteTotal = () => {
-        if (!selectedTicket || !selectedTicket.quotationItems) return 0;
-        return selectedTicket.quotationItems.reduce((acc: number, item: any) => acc + item.total, 0);
+        if (!selectedTicket || !selectedTicket.items) return 0;
+        return selectedTicket.items.reduce((acc: number, item: any) => acc + (item.quantity * item.price), 0);
     };
 
     const handleSendQuotation = async () => {
         if (!selectedTicket) return;
         setIsLoading(true);
         try {
-            await apiFetch(`/admin/send-quotation/${selectedTicket.id}`, {
-                method: "POST",
+            await apiFetch(`/admin/tickets/${selectedTicket.id}/update-quotation`, {
+                method: "PATCH",
                 body: JSON.stringify({
-                    items: selectedTicket.quotationItems,
-                    totalAmount: calculateQuoteTotal()
+                    items: selectedTicket.items,
                 })
             });
             toast.success("Quotation updated and sent to customer!");
@@ -2892,11 +2890,41 @@ const AdminDashboard = () => {
 
                                     {/* Right: Items List */}
                                     <div className="lg:col-span-2 p-6 flex flex-col min-h-[500px]">
-                                        <div className="flex items-center justify-between mb-4">
+                                        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-4">
                                             <h3 className="text-sm font-black uppercase tracking-widest">Material List & Pricing</h3>
-                                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase text-accent border-accent/30 hover:bg-accent/5">
-                                                <Plus className="h-3 w-3 mr-1" /> Add Custom Item
-                                            </Button>
+                                            <div className="relative w-full sm:w-64">
+                                                <div className="relative">
+                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                                    <Input
+                                                        placeholder="Search items..."
+                                                        className="pl-9 h-9 text-xs"
+                                                        value={itemSearchQuery}
+                                                        onChange={(e) => handleCatalogSearch(e.target.value)}
+                                                    />
+                                                </div>
+                                                {catalogResults.length > 0 && (
+                                                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-primary/20 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                                        {catalogResults.map((item) => (
+                                                            <button
+                                                                key={item.id}
+                                                                className="w-full text-left p-3 hover:bg-primary/5 border-b last:border-0 transition-colors group"
+                                                                onClick={() => addQuotationItem(item)}
+                                                            >
+                                                                <div className="flex justify-between items-center">
+                                                                    <div>
+                                                                        <p className="text-xs font-bold text-slate-800 uppercase">{item.name}</p>
+                                                                        <p className="text-[10px] text-muted-foreground">{item.category || 'Utility Item'}</p>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <p className="text-xs font-black text-primary">₹{item.price}</p>
+                                                                        <p className="text-[9px] text-muted-foreground uppercase">{item.unit}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="flex-1 overflow-y-auto space-y-3">
@@ -2964,6 +2992,7 @@ const AdminDashboard = () => {
                                                 <Button
                                                     className="flex-1 h-14 bg-accent hover:bg-accent/90 text-white font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all hover:-translate-y-1 active:scale-95"
                                                     onClick={handleSendQuotation}
+                                                    loading={isLoading}
                                                 >
                                                     <Download className="h-5 w-5 mr-3" />
                                                     Finalize & Send Quote

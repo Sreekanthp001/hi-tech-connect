@@ -215,6 +215,7 @@ model Notification {
   title     String
   message   String
   type      String
+  ticketId  String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 }
