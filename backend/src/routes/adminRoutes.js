@@ -18,7 +18,9 @@ router.patch('/tickets/:ticketId/status', ticketController.adminUpdateStatus);
 router.post('/tickets/:ticketId/add-payment', ticketController.addPayment);
 router.delete('/tickets/:id', ticketController.deleteTicket);
 router.post('/assign-survey/:id', workflowController.assignSiteVisit);
-router.post('/send-quotation/:id', workflowController.sendQuotation);
+router.post('/send-quotation/:id', ticketController.sendQuotation); // Using ticketController for consistency
+router.get('/tickets/:id/quotation', ticketController.getQuotation);
+router.patch('/tickets/:id/update-quotation', ticketController.updateQuotation);
 router.patch('/tickets/:id/assign-planning-worker', ticketController.assignPlanningWorker);
 router.patch('/tickets/:id/assign-installation-worker', ticketController.assignInstallationWorker);
 

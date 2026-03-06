@@ -12,7 +12,7 @@ import {
     Users, Ticket, CheckCircle2, AlertCircle, ArrowUpRight,
     RefreshCw, TrendingUp, UserPlus, Key, Trash2, MapPin, Plus, X, Copy,
     Search, CreditCard, History, ArrowLeft, Building, Clock, Phone, Download, Camera,
-    Bell, ShieldAlert, CalendarClock, Edit3, MinusCircle
+    Bell, ShieldAlert, CalendarClock, Edit3, MinusCircle, BellRing, Eye
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import apiFetch from "@/lib/api";
@@ -145,6 +145,8 @@ const STATUS_LABELS: Record<string, string> = {
     NEW: "New Service Request",
     SITE_VISIT_ASSIGNED: "Planning Assigned",
     SITE_VISIT_COMPLETED: "Planning Done",
+    INSTALLATION_APPROVED: "Inst. Approved",
+    INSTALLATION_ASSIGNED: "Inst. Assigned",
 };
 
 // ─── StatusBadge ────────────────────────────────────────────────────────────
@@ -163,6 +165,8 @@ const StatusBadge = ({ status }: { status: string }) => {
         "NEW": "bg-purple-100 text-purple-700 border-purple-200 font-bold px-2 py-0.5",
         "SITE_VISIT_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5",
         "SITE_VISIT_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold px-1 py-0.5",
+        "INSTALLATION_APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold px-2 py-0.5",
+        "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
     };
     return (
         <Badge variant="outline" className={styles[status] || ""}>
@@ -1329,7 +1333,7 @@ const AdminDashboard = () => {
                                                                                 Assign Planning
                                                                             </Button>
                                                                         )}
-                                                                        {(t.status === "SITE_VISIT_COMPLETED" || t.status === "INSTALLATION_ASSIGNED") && (
+                                                                        {(t.status === "SITE_VISIT_COMPLETED" || t.status === "INSTALLATION_APPROVED" || t.status === "INSTALLATION_ASSIGNED") && (
                                                                             <Button
                                                                                 size="sm"
                                                                                 className="h-8 text-[9px] font-black uppercase bg-blue-600 hover:bg-blue-700"
@@ -1339,6 +1343,19 @@ const AdminDashboard = () => {
                                                                                 }}
                                                                             >
                                                                                 Assign Work
+                                                                            </Button>
+                                                                        )}
+                                                                        {t.status === "SITE_VISIT_COMPLETED" && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[9px] font-black uppercase bg-orange-600 hover:bg-orange-700"
+                                                                                onClick={() => {
+                                                                                    setSelectedTicket(t);
+                                                                                    setIsQuoteModalOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                <Eye className="h-3 w-3 mr-1" />
+                                                                                Review Quote
                                                                             </Button>
                                                                         )}
                                                                         {t.status !== "COMPLETED" && (
@@ -2356,8 +2373,8 @@ const AdminDashboard = () => {
 
                 {
                     isTicketModalOpen && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-300">
-                            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative">
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-300" onClick={closeTicketModal}>
+                            <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative" onClick={e => e.stopPropagation()}>
                                 <Button
                                     variant="ghost"
                                     size="icon"
@@ -2807,7 +2824,158 @@ const AdminDashboard = () => {
                 }
 
 
-                {/* Multi-Worker Assignment Modal */}
+                {/* Quotation Review Modal */}
+                {isQuoteModalOpen && selectedTicket && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsQuoteModalOpen(false)}>
+                        <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl premium-card border-primary/20" onClick={e => e.stopPropagation()}>
+                            <CardHeader className="pb-4 sticky top-0 bg-background z-20 border-b">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                                            <CreditCard className="h-6 w-6 text-orange-600" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-xl font-black italic">Quotation Review</CardTitle>
+                                            <CardDescription className="text-xs">
+                                                Ticket: <span className="font-bold text-foreground">#{selectedTicket.id.slice(0, 8).toUpperCase()}</span> - {selectedTicket.clientName}
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-10 w-10 border shadow-sm rounded-full" onClick={() => setIsQuoteModalOpen(false)}>
+                                        <X className="h-5 w-5" />
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="grid grid-cols-1 lg:grid-cols-3">
+                                    {/* Left: Planning Details */}
+                                    <div className="p-6 bg-secondary/5 border-r space-y-6">
+                                        <div className="space-y-4">
+                                            <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b pb-1">Site Planning Data</h3>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1">
+                                                    <p className="text-[9px] font-bold text-muted-foreground uppercase">Cameras</p>
+                                                    <p className="font-black text-sm">{selectedTicket.numCameras || 'N/A'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[9px] font-bold text-muted-foreground uppercase">Cable (M)</p>
+                                                    <p className="font-black text-sm">{selectedTicket.cableLength || 'N/A'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[9px] font-bold text-muted-foreground uppercase">System</p>
+                                                    <p className="font-bold text-xs">{selectedTicket.nvrDvrType || 'N/A'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[9px] font-bold text-muted-foreground uppercase">Storage</p>
+                                                    <p className="font-bold text-xs">{selectedTicket.hardDiskType || 'N/A'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-b pb-1">Technician Notes</h3>
+                                            <p className="text-xs italic bg-white p-3 rounded-lg border shadow-sm min-h-[100px]">
+                                                {selectedTicket.surveyNotes || "No notes provided by technician."}
+                                            </p>
+                                        </div>
+
+                                        <div className="p-4 bg-orange-50 border border-orange-100 rounded-xl space-y-2">
+                                            <p className="text-[9px] font-black text-orange-900 uppercase">Current Status</p>
+                                            <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                                                {selectedTicket.quotationStatus || 'PENDING'}
+                                            </Badge>
+                                            <p className="text-[9px] text-orange-700 leading-tight">
+                                                Review the items shared by technician and adjust prices before sending to the customer.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Right: Items List */}
+                                    <div className="lg:col-span-2 p-6 flex flex-col min-h-[500px]">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-black uppercase tracking-widest">Material List & Pricing</h3>
+                                            <Button variant="outline" size="sm" className="h-8 text-[10px] font-black uppercase text-accent border-accent/30 hover:bg-accent/5">
+                                                <Plus className="h-3 w-3 mr-1" /> Add Custom Item
+                                            </Button>
+                                        </div>
+
+                                        <div className="flex-1 overflow-y-auto space-y-3">
+                                            {(!selectedTicket.items || selectedTicket.items.length === 0) ? (
+                                                <div className="h-full flex flex-col items-center justify-center text-muted-foreground italic space-y-2">
+                                                    <Search className="h-8 w-8 opacity-20" />
+                                                    <p className="text-xs">No items linked to this ticket.</p>
+                                                </div>
+                                            ) : (
+                                                selectedTicket.items.map((item: any, idx: number) => (
+                                                    <div key={idx} className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-colors group">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-black uppercase truncate group-hover:text-primary transition-colors">{item.itemName}</p>
+                                                            <p className="text-[9px] text-muted-foreground font-medium">Technician Suggested Part</p>
+                                                        </div>
+                                                        <div className="flex items-center gap-4 w-full sm:w-auto">
+                                                            <div className="w-20">
+                                                                <Label className="text-[8px] font-black uppercase text-muted-foreground mb-1 block">Qty</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    className="h-9 font-bold text-center"
+                                                                    value={item.quantity}
+                                                                    onChange={(e) => updateQuoteItem(idx, 'quantity', e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="w-24">
+                                                                <Label className="text-[8px] font-black uppercase text-muted-foreground mb-1 block">Price (₹)</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    className="h-9 font-bold text-center text-primary"
+                                                                    value={item.price}
+                                                                    onChange={(e) => updateQuoteItem(idx, 'price', e.target.value)}
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-center h-9 mt-5 px-3 bg-secondary/20 rounded-lg min-w-[100px]">
+                                                                <span className="text-xs font-black">₹{(item.quantity * item.price).toLocaleString()}</span>
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-9 w-9 text-destructive mt-5 hover:bg-destructive/10"
+                                                                onClick={() => removeQuotationItem(idx)}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+
+                                        {/* Footer Summary */}
+                                        <div className="mt-6 pt-6 border-t space-y-6">
+                                            <div className="flex items-center justify-between p-4 bg-primary/5 rounded-2xl border border-primary/10">
+                                                <div>
+                                                    <p className="text-[10px] font-black text-primary uppercase tracking-widest">Grand Total Amount</p>
+                                                    <p className="text-[11px] text-muted-foreground">GST & Service charges included automatically.</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-3xl font-black text-primary">₹{calculateQuoteTotal().toLocaleString('en-IN')}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-4">
+                                                <Button
+                                                    className="flex-1 h-14 bg-accent hover:bg-accent/90 text-white font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all hover:-translate-y-1 active:scale-95"
+                                                    onClick={handleSendQuotation}
+                                                >
+                                                    <Download className="h-5 w-5 mr-3" />
+                                                    Finalize & Send Quote
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
                 {isAssignModalOpen && activeAssignTicket && (
                     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
                         <Card className="w-full max-w-md shadow-2xl premium-card border-primary/20">

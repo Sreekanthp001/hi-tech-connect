@@ -38,7 +38,7 @@ const distributeWorkerSalary = async (ticketId, totalAmount) => {
 // 1. Public Ticket Creation
 exports.createTicket = async (req, res) => {
     try {
-        const { title, description, type, address, latitude, longitude, clientName, clientPhone, clientEmail, requestType } = req.body;
+        const { title, description, type, address, latitude, longitude, clientName, clientPhone, clientEmail, requestType, alternatePhone } = req.body;
 
         // Basic presence validation
         if (!title || !description || !type || !address || !clientName || !clientPhone || !requestType) {
@@ -51,6 +51,12 @@ exports.createTicket = async (req, res) => {
             return res.status(400).json({ error: "Invalid phone number. Must be numeric and at least 10 digits." });
         }
 
+        if (alternatePhone) {
+            const cleanAltPhone = alternatePhone.replace(/\s+/g, '').replace('+', '');
+            if (!/^\d{10,}$/.test(cleanAltPhone)) {
+                return res.status(400).json({ error: "Invalid alternate phone number. Must be numeric and at least 10 digits." });
+            }
+        }
         // Type validation
         if (!['INSTALLATION', 'COMPLAINT'].includes(type)) {
             return res.status(400).json({ error: "Invalid service type. Must be INSTALLATION or COMPLAINT." });
@@ -84,7 +90,9 @@ exports.createTicket = async (req, res) => {
                 clientPhone,
                 clientEmail,
                 requestType,
-                status: 'NEW'
+                alternatePhone,
+                status: 'NEW',
+                quotationStatus: 'NONE'
             }
         });
 
@@ -126,7 +134,10 @@ exports.getAllTickets = async (req, res) => {
                     orderBy: { createdAt: 'desc' }
                 },
                 ticketPhotos: true,
-                invoice: true
+                invoice: true,
+                items: true,
+                planningWorker: { select: { id: true, name: true } },
+                installationWorker: { select: { id: true, name: true } }
             }
         });
         res.status(200).json(tickets);
@@ -846,6 +857,179 @@ exports.deleteTicket = async (req, res) => {
         res.status(200).json({ message: "Ticket and all related records deleted successfully" });
     } catch (error) {
         console.error("Delete ticket error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Submit Ticket Items (Worker)
+ * POST /api/tickets/:id/items
+ */
+exports.submitTicketItems = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { items, numCameras, cableLength, nvrDvrType, hardDiskType, powerSupply, surveyNotes } = req.body;
+
+        if (!items || !Array.isArray(items)) {
+            return res.status(400).json({ error: "Items array is required" });
+        }
+
+        // Use transaction to ensure all updates succeed
+        const result = await prisma.$transaction(async (tx) => {
+            // Delete existing items if any
+            await tx.ticketItem.deleteMany({ where: { ticketId: id } });
+
+            // Create new items
+            await tx.ticketItem.createMany({
+                data: items.map(item => ({
+                    ticketId: id,
+                    itemName: item.itemName,
+                    quantity: Number(item.quantity) || 1,
+                    price: Number(item.price) || 0
+                }))
+            });
+
+            // Update ticket status and survey details
+            return await tx.ticket.update({
+                where: { id },
+                data: {
+                    status: 'SITE_VISIT_COMPLETED',
+                    quotationStatus: 'PENDING',
+                    numCameras: Number(numCameras),
+                    cableLength: Number(cableLength),
+                    nvrDvrType,
+                    hardDiskType,
+                    powerSupply,
+                    surveyNotes
+                }
+            });
+        });
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("Submit ticket items error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Get Quotation (Admin/Worker/Client)
+ * GET /api/tickets/:id/quotation
+ */
+exports.getQuotation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const ticket = await prisma.ticket.findUnique({
+            where: { id },
+            include: { items: true }
+        });
+
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
+        const total = ticket.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        res.status(200).json({
+            ticket,
+            items: ticket.items,
+            total
+        });
+    } catch (error) {
+        console.error("Get quotation error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Update Quotation (Admin)
+ * PATCH /api/tickets/:id/update-quotation
+ */
+exports.updateQuotation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { items } = req.body;
+
+        if (!items || !Array.isArray(items)) {
+            return res.status(400).json({ error: "Items array is required" });
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            // Delete existing
+            await tx.ticketItem.deleteMany({ where: { ticketId: id } });
+
+            // Create new
+            await tx.ticketItem.createMany({
+                data: items.map(item => ({
+                    ticketId: id,
+                    itemName: item.itemName,
+                    quantity: Number(item.quantity) || 1,
+                    price: Number(item.price) || 0
+                }))
+            });
+
+            // Update total amount in ticket if needed, or just leave it for final invoice
+            const total = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
+
+            return await tx.ticket.update({
+                where: { id },
+                data: { totalAmount: total }
+            });
+        });
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("Update quotation error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Send Quotation to Customer (Admin)
+ * POST /api/tickets/:id/send-quotation
+ */
+exports.sendQuotation = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedTicket = await prisma.ticket.update({
+            where: { id },
+            data: {
+                quotationStatus: 'SENT'
+            }
+        });
+
+        res.status(200).json(updatedTicket);
+    } catch (error) {
+        console.error("Send quotation error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+/**
+ * Handle Customer Quotation Action (Approve/Reject)
+ * POST /api/tickets/:id/quotation-action
+ */
+exports.handleCustomerAction = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action } = req.body; // 'APPROVE' or 'REJECT'
+
+        if (!['APPROVE', 'REJECT'].includes(action)) {
+            return res.status(400).json({ error: "Invalid action" });
+        }
+
+        const status = action === 'APPROVE' ? 'INSTALLATION_APPROVED' : 'SITE_VISIT_COMPLETED';
+        const qStatus = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+
+        const updatedTicket = await prisma.ticket.update({
+            where: { id },
+            data: {
+                status: status,
+                quotationStatus: qStatus
+            }
+        });
+
+        res.status(200).json(updatedTicket);
+    } catch (error) {
+        console.error("Customer action error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

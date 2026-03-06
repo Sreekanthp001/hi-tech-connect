@@ -35,6 +35,7 @@ enum TicketStatus {
   NEW
   SITE_VISIT_ASSIGNED
   SITE_VISIT_COMPLETED
+  INSTALLATION_APPROVED
 }
 
 enum TicketProgress {
@@ -117,7 +118,7 @@ model Ticket {
   additionalItems    String?
 
   quotationItems     Json?
-  quotationStatus    String?
+  quotationStatus    QuotationStatus? @default(NONE)
   assignedTechnician String?
   assignedTeam       String?
 
@@ -141,6 +142,7 @@ model Ticket {
   payments              PaymentHistory[]
   internalNotifications InternalNotification[]
   stockTransactions     StockTransaction[]
+  items                 TicketItem[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 }
@@ -327,9 +329,11 @@ model StockTransaction {
 }
 
 enum QuotationStatus {
-  DRAFT
+  NONE
+  PENDING
   SENT
   APPROVED
+  REJECTED
   CANCELLED
 }
 
@@ -351,7 +355,7 @@ model Quotation {
   discountType  String? // FLAT, PERCENTAGE
   gstAmount     Float
   grandTotal    Float
-  status        QuotationStatus @default(DRAFT)
+  status        QuotationStatus @default(NONE)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
@@ -431,4 +435,14 @@ model InstallationAssignment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model TicketItem {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  itemName  String
+  quantity  Int      @default(1)
+  price     Float    @default(0)
+  createdAt DateTime @default(now())
 }

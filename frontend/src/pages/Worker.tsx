@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import apiFetch from "@/lib/api";
 import { toast } from "sonner";
@@ -51,11 +51,11 @@ const STATUS_LABELS: Record<string, string> = {
     PENDING: "Pending",
     IN_PROGRESS: "In Progress",
     COMPLETED: "Completed",
+    NEW: "New Service Request",
     NEW_REQUEST: "New Request",
-    SURVEY_ASSIGNED: "Survey Assigned",
-    SURVEY_COMPLETED: "Survey Done",
-    QUOTATION_SENT: "Quoted",
-    APPROVED: "Approved",
+    SITE_VISIT_ASSIGNED: "Survey Assigned",
+    SITE_VISIT_COMPLETED: "Survey Done",
+    INSTALLATION_APPROVED: "Approved",
     INSTALLATION_ASSIGNED: "Job Assigned",
 };
 
@@ -64,6 +64,11 @@ const StatusBadge = ({ status }: { status: string }) => {
         "PENDING": "bg-yellow-100 text-yellow-700 border-yellow-200 font-bold",
         "IN_PROGRESS": "bg-blue-100 text-blue-700 border-blue-200 font-bold",
         "COMPLETED": "bg-green-100 text-green-700 border-green-200 font-bold",
+        "NEW": "bg-purple-100 text-purple-700 border-purple-200 font-bold",
+        "SITE_VISIT_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold",
+        "SITE_VISIT_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold",
+        "INSTALLATION_APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold",
+        "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold",
     };
     return (
         <Badge variant="outline" className={`${styles[status] || ""}`}>
@@ -211,23 +216,50 @@ const WorkerDashboard = () => {
         }
     };
 
+    const [materialItems, setMaterialItems] = useState<{ itemName: string, quantity: number, price: number }[]>([
+        { itemName: "", quantity: 1, price: 0 }
+    ]);
+
+    const addMaterialItem = () => {
+        setMaterialItems([...materialItems, { itemName: "", quantity: 1, price: 0 }]);
+    };
+
+    const removeMaterialItem = (idx: number) => {
+        setMaterialItems(materialItems.filter((_, i) => i !== idx));
+    };
+
+    const updateMaterialItem = (idx: number, field: string, value: any) => {
+        const newItems = [...materialItems];
+        (newItems[idx] as any)[field] = value;
+        setMaterialItems(newItems);
+    };
+
     const handleCompleteSurvey = async () => {
         if (!activeSurveyTicket) return;
+
+        const validItems = materialItems.filter(i => i.itemName.trim() !== "");
+        if (validItems.length === 0) {
+            toast.error("Please add at least one material item.");
+            return;
+        }
+
         setUpdating(activeSurveyTicket.id);
         try {
-            await apiFetch(`/worker/tickets/${activeSurveyTicket.id}/complete-survey`, {
+            // Submit survey details and material items in one go
+            await apiFetch(`/worker/tickets/${activeSurveyTicket.id}/items`, {
                 method: "POST",
-                body: JSON.stringify({
+                body: {
+                    items: validItems,
                     numCameras: parseInt(surveyData.numCameras),
                     cableLength: parseInt(surveyData.cableLength),
                     nvrDvrType: surveyData.nvrDvrType,
                     hardDiskType: surveyData.hardDiskType,
                     powerSupply: surveyData.powerSupply,
                     surveyNotes: surveyData.surveyNotes,
-                    additionalItems: surveyData.additionalItems
-                }),
+                },
             });
-            toast.success("Site survey completed!");
+
+            toast.success("Site survey and material list submitted!");
             setIsSurveyModalOpen(false);
             fetchTickets();
         } catch (err: any) {
@@ -993,13 +1025,47 @@ const WorkerDashboard = () => {
                                     />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-black uppercase text-accent tracking-widest">Additional Items (Optional)</Label>
-                                    <Input
-                                        placeholder="e.g. Rack, HDMI Cable, Monitor"
-                                        value={surveyData.additionalItems}
-                                        onChange={(e) => setSurveyData({ ...surveyData, additionalItems: e.target.value })}
-                                    />
+                                <div className="space-y-4 pt-4 border-t">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-[10px] font-black uppercase text-accent tracking-widest">Required Materials (For Quotation)</Label>
+                                        <Button type="button" variant="outline" size="sm" className="h-7 text-[9px] font-black uppercase bg-accent/5" onClick={addMaterialItem}>
+                                            <Plus className="h-3 w-3 mr-1" /> Add Item
+                                        </Button>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {materialItems.map((item, idx) => (
+                                            <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-right-2">
+                                                <div className="flex-1">
+                                                    <Input
+                                                        placeholder="Item Name (e.g. 2MP Dome Camera)"
+                                                        value={item.itemName}
+                                                        onChange={(e) => updateMaterialItem(idx, 'itemName', e.target.value)}
+                                                        className="h-8 text-xs font-bold"
+                                                    />
+                                                </div>
+                                                <div className="w-16">
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="Qty"
+                                                        value={item.quantity}
+                                                        onChange={(e) => updateMaterialItem(idx, 'quantity', parseInt(e.target.value) || 0)}
+                                                        className="h-8 text-xs text-center font-bold"
+                                                    />
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                                    onClick={() => removeMaterialItem(idx)}
+                                                    disabled={materialItems.length === 1}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[9px] text-muted-foreground italic">* Admin will add pricing for these items before sending to customer.</p>
                                 </div>
 
                                 <Button
