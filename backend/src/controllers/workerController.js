@@ -1,50 +1,32 @@
 const prisma = require('../config/prisma');
 
-<<<<<<< HEAD
-// Get worker assigned tickets
 exports.getWorkerTickets = async (req, res) => {
-    try {
-
-=======
-exports.getWorkerTickets = async (req, res) => {
-    try {
->>>>>>> 6b81175beaeaf12430d05c36ab1ef9e6e9a17528
-        const workerId = req.user.userId;
-
-        const tickets = await prisma.ticket.findMany({
-            where: {
-                OR: [
-                    { planningWorkerId: workerId },
-                    { installationWorkerId: workerId }
-<<<<<<< HEAD
-                ]
-=======
-                ],
-                status: {
-                    not: "WORK_COMPLETED"
-                }
-            },
-            include: {
-                ticketPhotos: true,
-                assignments: {
-                    include: {
-                        worker: { select: { id: true, name: true } }
-                    }
-                }
->>>>>>> 6b81175beaeaf12430d05c36ab1ef9e6e9a17528
-            },
-            orderBy: {
-                createdAt: "desc"
-            }
-        });
-
-        res.status(200).json(tickets);
-<<<<<<< HEAD
-
-=======
->>>>>>> 6b81175beaeaf12430d05c36ab1ef9e6e9a17528
-    } catch (error) {
-        console.error("Worker tickets error:", error);
-        res.status(500).json({ error: "Failed to fetch worker tickets" });
-    }
+  try {
+    const workerId = req.user.userId;
+    const tickets = await prisma.ticket.findMany({
+      where: {
+        OR: [
+          { planningWorkerId: workerId },
+          { installationWorkerId: workerId },
+          { supportWorker1Id: workerId },
+          { supportWorker2Id: workerId },
+          { assignments: { some: { workerId: workerId } } }
+        ],
+        NOT: { status: "COMPLETED" }
+      },
+      include: {
+        assignments: {
+          include: {
+            worker: { select: { id: true, name: true, email: true } }
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.json(tickets);
+  } catch (error) {
+    console.error("Worker ticket fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch worker tickets" });
+  }
 };

@@ -146,7 +146,6 @@ const STATUS_LABELS: Record<string, string> = {
     SITE_VISIT_ASSIGNED: "Planning Assigned",
     SITE_VISIT_COMPLETED: "Planning Done",
     INSTALLATION_APPROVED: "Inst. Approved",
-    INSTALLATION_ASSIGNED: "Inst. Assigned",
 };
 
 // ─── StatusBadge ────────────────────────────────────────────────────────────
