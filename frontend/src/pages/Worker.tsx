@@ -387,7 +387,7 @@ const WorkerDashboard = () => {
                                             </div>
 
                                             {/* Phase 3 & 4: Progress & Photos */}
-                                            {task.status === "IN_PROGRESS" && (
+                                            {(task.status === "IN_PROGRESS" || task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED") && (
                                                 <div className="mb-6 space-y-4 bg-blue-50/30 p-4 rounded-xl border border-blue-100">
                                                     <div className="flex flex-col gap-2">
                                                         <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Update Live Progress</span>
@@ -622,7 +622,7 @@ const WorkerDashboard = () => {
                                                                 Resume Work
                                                             </Button>
                                                         )}
-                                                        {task.status === "IN_PROGRESS" && (
+                                                        {(task.status === "IN_PROGRESS" || task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED") && (
                                                             <Button
                                                                 variant="outline"
                                                                 className="flex-1 font-bold border-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 transition-all h-12"
