@@ -918,6 +918,8 @@ exports.updateQuotation = async (req, res) => {
             return res.status(400).json({ error: "Items array is required" });
         }
 
+        const ticket = await prisma.ticket.findUnique({ where: { id } });
+        if (!ticket) return res.status(404).json({ error: "Ticket not found" });
         const result = await prisma.$transaction(async (tx) => {
             // Delete existing
             await tx.ticketItem.deleteMany({ where: { ticketId: id } });

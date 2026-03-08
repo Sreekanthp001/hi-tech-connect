@@ -10,8 +10,8 @@ class PdfService {
         // Header - Branding
         doc.fillColor('#1e293b').fontSize(24).font('Helvetica-Bold').text('Hi-Tech Connect', { align: 'left' });
         doc.fillColor('#64748b').fontSize(9).font('Helvetica').text('Smart Security Solutions & Advanced CCTV Surveillance', { align: 'left' });
-        doc.text('GSTIN: 37AAAAA0000A1Z5 | Contact: +91 99999 88888', { align: 'left' });
-        doc.text('Address: Road No. 1, Jubilee Hills, Hyderabad, TS, 500033', { align: 'left' });
+        doc.text('GSTIN: 37AAAAA0000A1Z5 | Contact: +91 09885680280', { align: 'left' });
+        doc.text('Address: First floor, Kac plaza, Rallapalli Ramasubbaiah St, Ramji Nagar, Nellore, Andhra Pradesh 524001', { align: 'left' });
 
         // Quotation Metadata
         doc.moveUp(4);
@@ -31,7 +31,7 @@ class PdfService {
         doc.font('Helvetica').text(`Phone: ${quotation.customerPhone}`, 50, infoY + 30);
 
         doc.fontSize(11).font('Helvetica-Bold').text('WORK DETAILS:', 350, infoY);
-        doc.fontSize(10).font('Helvetica').text(`Ticket ID: ${quotation.ticketId || '#HTC-NEW'}`, 350, infoY + 15);
+        doc.fontSize(10).font('Helvetica').text(`Ref: ${quotation.quotationNo || 'HTC-NEW'}`, 350, infoY + 15);
         doc.text(`System Type: ${quotation.cameraType || 'Premium CCTV'}`, 350, infoY + 30);
 
         doc.moveDown(4);
