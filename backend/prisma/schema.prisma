@@ -72,6 +72,8 @@ model User {
 
   planningTickets     Ticket[] @relation("PlanningWorker")
   installationTickets Ticket[] @relation("InstallationWorker")
+  supportTickets1    Ticket[] @relation("SupportWorker1")
+  supportTickets2    Ticket[] @relation("SupportWorker2")
 }
 
 model Ticket {
@@ -126,6 +128,11 @@ model Ticket {
   planningWorker       User?   @relation("PlanningWorker", fields: [planningWorkerId], references: [id])
   installationWorkerId String?
   installationWorker   User?   @relation("InstallationWorker", fields: [installationWorkerId], references: [id])
+  
+  supportWorker1Id     String?
+  supportWorker1       User?   @relation("SupportWorker1", fields: [supportWorker1Id], references: [id])
+  supportWorker2Id     String?
+  supportWorker2       User?   @relation("SupportWorker2", fields: [supportWorker2Id], references: [id])
 
   beforeImages       Json?
   afterImages        Json?
@@ -345,6 +352,9 @@ model Quotation {
 
   leadId String?
   lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  ticketId String? @unique
+  ticket   Ticket? @relation(fields: [ticketId], references: [id])
 
   customerName  String
   customerPhone String

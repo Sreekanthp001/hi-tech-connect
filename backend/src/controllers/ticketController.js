@@ -935,10 +935,68 @@ exports.updateQuotation = async (req, res) => {
             // Update total amount in ticket if needed, or just leave it for final invoice
             const total = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.quantity)), 0);
 
+            // Upsert Quotation record for professional PDF generation
+            const subtotal = total;
+            const gstAmount = subtotal * 0.18;
+            const grandTotal = subtotal + gstAmount;
+
+            await tx.quotation.upsert({
+                where: { ticketId: id },
+                update: {
+                    customerName: ticket.clientName,
+                    customerPhone: ticket.clientPhone,
+                    subtotal,
+                    gstAmount,
+                    grandTotal,
+                    status: 'SENT',
+                    items: {
+                        deleteMany: {},
+                        create: items.map(item => ({
+                            name: item.itemName,
+                            quantity: Number(item.quantity) || 1,
+                            unitPrice: Number(item.price) || 0,
+                            totalPrice: (Number(item.quantity) || 1) * (Number(item.price) || 0)
+                        }))
+                    }
+                },
+                create: {
+                    ticketId: id,
+                    quotationNo: `QTN-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+                    customerName: ticket.clientName,
+                    customerPhone: ticket.clientPhone,
+                    cameraCount: ticket.numCameras || 0,
+                    cameraType: ticket.nvrDvrType || 'CCTV',
+                    wireLength: ticket.cableLength || 0,
+                    subtotal,
+                    gstAmount,
+                    grandTotal,
+                    status: 'SENT',
+                    items: {
+                        create: items.map(item => ({
+                            name: item.itemName,
+                            quantity: Number(item.quantity) || 1,
+                            unitPrice: Number(item.price) || 0,
+                            totalPrice: (Number(item.quantity) || 1) * (Number(item.price) || 0)
+                        }))
+                    }
+                }
+            });
+
             return await tx.ticket.update({
                 where: { id },
                 data: {
                     totalAmount: total,
+                    quotationItems: {
+                        items: items.map(item => ({
+                            name: item.itemName,
+                            quantity: item.quantity,
+                            unitPrice: item.price,
+                            totalPrice: item.quantity * item.price
+                        })),
+                        subtotal,
+                        gstAmount,
+                        grandTotal
+                    },
                     status: 'QUOTATION_SENT',
                     quotationStatus: 'SENT'
                 }

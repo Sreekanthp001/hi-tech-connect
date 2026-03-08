@@ -61,6 +61,19 @@ const STATUS_LABELS: Record<string, string> = {
     WORK_COMPLETED: "Work Completed",
 };
 
+const MASTER_ITEMS = [
+    "HIKVISION 32CH NVR", "HIKVISION 16CH NVR", "HIKVISION 8CH NVR", "HIKVISION 4CH NVR",
+    "HIKVISION 32CH DVR", "HIKVISION 16CH DVR", "HIKVISION 8CH DVR", "HIKVISION 4CH DVR",
+    "PRAMA 4MP IP CAMERAS", "PRAMA 2MP IP CAMERAS", "HIKVISION 3K COLORVU CAMERAS",
+    "HIKVISION 2MP COLORVU CAMERAS", "HIKVISION 5MP HD CAMERAS", "HIKVISION 2MP FULL HD CAMERAS",
+    "HIKVISION 2MP HD CAMERAS", "4TB HARD DISK (ORIGINAL)", "2TB HARD DISK (ORIGINAL)",
+    "1TB HARD DISK (ORIGINAL)", "500GB HARD DISK", "16CH POWER SUPPLY",
+    "8CH POWER SUPPLY", "4CH POWER SUPPLY", "BNC, DC PINS & BOXES", "SERVER RACK",
+    "CAT 6 CABLE", "CAT 6 CABLE WITH LAYING CHARGES", "CAT 6 CABLE WITH LAYING CHARGES (INCLUDING PIPES)",
+    "3+1 CAMERA CABLE", "3+1 CAMERA CABLE WITH LAYING CHARGES", "3+1 CAMERA CABLE WITH LAYING CHARGES (INCLUDING PIPES)",
+    "INSTALLATION CHARGES"
+];
+
 const StatusBadge = ({ status }: { status: string }) => {
     const styles: Record<string, string> = {
         "PENDING": "bg-yellow-100 text-yellow-700 border-yellow-200 font-bold",
@@ -223,51 +236,40 @@ const WorkerDashboard = () => {
         }
     };
 
-    const [materialItems, setMaterialItems] = useState<{ itemName: string, quantity: number, price: number }[]>([
-        { itemName: "", quantity: 1, price: 0 }
-    ]);
+    const [surveyQuantities, setSurveyQuantities] = useState<Record<string, number>>({});
+    const [surveyNotes, setSurveyNotes] = useState("");
 
-    const addMaterialItem = () => {
-        setMaterialItems([...materialItems, { itemName: "", quantity: 1, price: 0 }]);
-    };
-
-    const removeMaterialItem = (idx: number) => {
-        setMaterialItems(materialItems.filter((_, i) => i !== idx));
-    };
-
-    const updateMaterialItem = (idx: number, field: string, value: any) => {
-        const newItems = [...materialItems];
-        (newItems[idx] as any)[field] = value;
-        setMaterialItems(newItems);
+    const updateSurveyQuantity = (itemName: string, qty: number) => {
+        setSurveyQuantities(prev => ({ ...prev, [itemName]: qty }));
     };
 
     const handleCompleteSurvey = async () => {
         if (!activeSurveyTicket) return;
 
-        const validItems = materialItems.filter(i => i.itemName.trim() !== "");
-        if (validItems.length === 0) {
-            toast.error("Please add at least one material item.");
+        const items = Object.entries(surveyQuantities)
+            .filter(([_, qty]) => qty > 0)
+            .map(([name, qty]) => ({ name, quantity: qty }));
+
+        if (items.length === 0) {
+            toast.error("Please add at least one item with quantity.");
             return;
         }
 
         setUpdating(activeSurveyTicket.id);
         try {
-            // Submit survey details and material items in one go
-            await apiFetch(`/worker/tickets/${activeSurveyTicket.id}/items`, {
+            await apiFetch(`/survey/submit`, {
                 method: "POST",
                 body: {
-                    items: validItems,
-                    numCameras: parseInt(surveyData.numCameras),
-                    cableLength: parseInt(surveyData.cableLength),
-                    nvrDvrType: surveyData.nvrDvrType,
-                    hardDiskType: surveyData.hardDiskType,
-                    powerSupply: surveyData.powerSupply,
-                    surveyNotes: surveyData.surveyNotes,
+                    ticketId: activeSurveyTicket.id,
+                    items,
+                    notes: surveyNotes,
                 },
             });
 
-            toast.success("Site survey and material list submitted!");
+            toast.success("Site survey submitted! Quotation generated.");
             setIsSurveyModalOpen(false);
+            setSurveyQuantities({});
+            setSurveyNotes("");
             fetchTickets();
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to submit survey.");
@@ -358,6 +360,20 @@ const WorkerDashboard = () => {
                                                     <div className="mt-3 pt-3 border-t border-yellow-200">
                                                         <p className="text-[10px] font-bold uppercase tracking-widest text-yellow-600 mb-1">Reason for Pending</p>
                                                         <p className="text-xs text-yellow-700 italic font-medium">{task.pendingNote}</p>
+                                                    </div>
+                                                )}
+
+                                                {task.status === "SURVEY_ASSIGNED" && (
+                                                    <div className="mt-4 flex gap-3">
+                                                        <Button
+                                                            className="flex-1 bg-purple-600 hover:bg-purple-700 font-black uppercase tracking-widest gap-2 shadow-lg"
+                                                            onClick={() => {
+                                                                setActiveSurveyTicket(task);
+                                                                setIsSurveyModalOpen(true);
+                                                            }}
+                                                        >
+                                                            <MapPin className="h-4 w-4" /> Start Site Survey
+                                                        </Button>
                                                     </div>
                                                 )}
                                             </div>
@@ -933,10 +949,9 @@ const WorkerDashboard = () => {
                 </div>
             )}
 
-            {/* Site Survey Modal */}
             {isSurveyModalOpen && activeSurveyTicket && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
-                    <Card className="w-full max-w-lg shadow-2xl relative border-none max-h-[90vh] overflow-y-auto">
+                    <Card className="w-full max-w-2xl shadow-2xl relative border-none max-h-[90vh] flex flex-col">
                         <Button
                             variant="ghost"
                             size="icon"
@@ -946,142 +961,64 @@ const WorkerDashboard = () => {
                             <X className="h-4 w-4" />
                         </Button>
 
-                        <CardHeader className="bg-purple-50 border-b border-purple-100 rounded-t-xl sticky top-0 z-20">
+                        <CardHeader className="bg-purple-50 border-b border-purple-100 rounded-t-xl shrink-0">
                             <CardTitle className="text-xl font-black flex items-center gap-2 text-purple-800">
-                                <MapPin className="h-6 w-6" /> Site Survey Input
+                                <MapPin className="h-6 w-6" /> Installation Site Survey
                             </CardTitle>
-                            <CardDescription className="text-purple-700 font-medium italic">Enter site requirements for {activeSurveyTicket.clientName}</CardDescription>
+                            <CardDescription className="text-purple-700 font-medium italic">Requirement checklist for {activeSurveyTicket.clientName}</CardDescription>
                         </CardHeader>
 
-                        <CardContent className="p-6">
-                            <form onSubmit={(e) => { e.preventDefault(); handleCompleteSurvey(); }} className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Number of Cameras</Label>
-                                        <Input
-                                            type="number"
-                                            placeholder="e.g. 4"
-                                            value={surveyData.numCameras}
-                                            onChange={(e) => setSurveyData({ ...surveyData, numCameras: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Cable Length (Meters)</Label>
-                                        <Input
-                                            type="number"
-                                            placeholder="e.g. 90"
-                                            value={surveyData.cableLength}
-                                            onChange={(e) => setSurveyData({ ...surveyData, cableLength: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">NVR / DVR Type</Label>
-                                        <select
-                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                                            value={surveyData.nvrDvrType}
-                                            onChange={(e) => setSurveyData({ ...surveyData, nvrDvrType: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Select Type...</option>
-                                            <option value="4 CHANNEL NVR">4 Channel NVR</option>
-                                            <option value="8 CHANNEL NVR">8 Channel NVR</option>
-                                            <option value="16 CHANNEL NVR">16 Channel NVR</option>
-                                            <option value="4 CHANNEL DVR">4 Channel DVR</option>
-                                            <option value="8 CHANNEL DVR">8 Channel DVR</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Hard Disk (HDD)</Label>
-                                        <select
-                                            className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                                            value={surveyData.hardDiskType}
-                                            onChange={(e) => setSurveyData({ ...surveyData, hardDiskType: e.target.value })}
-                                            required
-                                        >
-                                            <option value="">Select Capacity...</option>
-                                            <option value="1TB HDD">1TB HDD</option>
-                                            <option value="2TB HDD">2TB HDD</option>
-                                            <option value="4TB HDD">4TB HDD</option>
-                                            <option value="500GB HDD">500GB HDD</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Power Supply</Label>
-                                    <Input
-                                        placeholder="e.g. 4 Port / 8 Port / PoE Switch"
-                                        value={surveyData.powerSupply}
-                                        onChange={(e) => setSurveyData({ ...surveyData, powerSupply: e.target.value })}
-                                        required
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Survey Notes</Label>
-                                    <textarea
-                                        className="w-full min-h-[100px] rounded-lg border-2 border-slate-200 p-3 text-sm focus:border-purple-500 outline-none"
-                                        placeholder="Mention site difficulties, height, extra materials..."
-                                        value={surveyData.surveyNotes}
-                                        onChange={(e) => setSurveyData({ ...surveyData, surveyNotes: e.target.value })}
-                                    />
-                                </div>
-
-                                <div className="space-y-4 pt-4 border-t">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-[10px] font-black uppercase text-accent tracking-widest">Required Materials (For Quotation)</Label>
-                                        <Button type="button" variant="outline" size="sm" className="h-7 text-[9px] font-black uppercase bg-accent/5" onClick={addMaterialItem}>
-                                            <Plus className="h-3 w-3 mr-1" /> Add Item
-                                        </Button>
-                                    </div>
-                                    <div className="space-y-3">
-                                        {materialItems.map((item, idx) => (
-                                            <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-right-2">
-                                                <div className="flex-1">
-                                                    <Input
-                                                        placeholder="Item Name (e.g. 2MP Dome Camera)"
-                                                        value={item.itemName}
-                                                        onChange={(e) => updateMaterialItem(idx, 'itemName', e.target.value)}
-                                                        className="h-8 text-xs font-bold"
-                                                    />
-                                                </div>
-                                                <div className="w-16">
+                        <CardContent className="p-0 overflow-hidden flex flex-col flex-1">
+                            <form onSubmit={(e) => { e.preventDefault(); handleCompleteSurvey(); }} className="flex flex-col h-full">
+                                <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between sticky top-0 bg-white pb-2 z-10 border-b">
+                                            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Item Description</Label>
+                                            <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest w-24 text-center">Req. Qty</Label>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {MASTER_ITEMS.map((item) => (
+                                                <div key={item} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 px-2 rounded-lg transition-colors group">
+                                                    <span className="text-sm font-bold text-slate-700">{item}</span>
                                                     <Input
                                                         type="number"
-                                                        placeholder="Qty"
-                                                        value={item.quantity}
-                                                        onChange={(e) => updateMaterialItem(idx, 'quantity', parseInt(e.target.value) || 0)}
-                                                        className="h-8 text-xs text-center font-bold"
+                                                        min="0"
+                                                        placeholder="0"
+                                                        className="w-24 h-9 text-center font-black text-purple-600 border-2 focus:border-purple-500"
+                                                        value={surveyQuantities[item] || ""}
+                                                        onChange={(e) => updateSurveyQuantity(item, parseInt(e.target.value) || 0)}
                                                     />
                                                 </div>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                                    onClick={() => removeMaterialItem(idx)}
-                                                    disabled={materialItems.length === 1}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        ))}
+                                            ))}
+                                        </div>
                                     </div>
-                                    <p className="text-[9px] text-muted-foreground italic">* Admin will add pricing for these items before sending to customer.</p>
+
+                                    <div className="space-y-2 pt-4 border-t">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Additional Planning Notes</Label>
+                                        <textarea
+                                            className="w-full min-h-[100px] rounded-xl border-2 border-slate-200 p-4 text-sm focus:border-purple-500 outline-none transition-all"
+                                            placeholder="Mention specific technician requirements, height details, or site constraints..."
+                                            value={surveyNotes}
+                                            onChange={(e) => setSurveyNotes(e.target.value)}
+                                        />
+                                    </div>
                                 </div>
 
-                                <Button
-                                    type="submit"
-                                    className="w-full h-12 bg-purple-600 hover:bg-purple-700 font-bold shadow-lg mt-2"
-                                    disabled={updating === activeSurveyTicket.id}
-                                >
-                                    {updating === activeSurveyTicket.id ? "Submitting..." : "Submit Site Survey"}
-                                </Button>
+                                <div className="p-6 bg-slate-50 border-t rounded-b-xl shrink-0">
+                                    <Button
+                                        type="submit"
+                                        className="w-full h-14 bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest shadow-xl shadow-purple-200 transition-all hover:-translate-y-1"
+                                        disabled={updating === activeSurveyTicket.id}
+                                    >
+                                        {updating === activeSurveyTicket.id ? (
+                                            <RefreshCw className="h-5 w-5 animate-spin mr-2" />
+                                        ) : (
+                                            <CheckCircle2 className="h-5 w-5 mr-2" />
+                                        )}
+                                        {updating === activeSurveyTicket.id ? "Submitting Plan..." : "Finalize & Submit Survey"}
+                                    </Button>
+                                    <p className="text-[10px] text-center text-muted-foreground mt-3 italic font-medium">Items with 0 quantity will be excluded from the quotation automatically.</p>
+                                </div>
                             </form>
                         </CardContent>
                     </Card>

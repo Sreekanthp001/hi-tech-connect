@@ -19,6 +19,7 @@ const inventoryRoutes = require('./routes/inventoryRoutes');
 const leadRoutes = require('./routes/leadRoutes');
 const installationRoutes = require('./routes/installationRoutes');
 const workflowRoutes = require('./routes/workflowRoutes');
+const surveyRoutes = require('./routes/surveyRoutes');
 const productController = require('./controllers/productController');
 const authMiddleware = require('./middleware/authMiddleware');
 const portfolioController = require('./controllers/portfolioController');
@@ -28,13 +29,13 @@ const app = express();
 // Middleware
 app.use(express.json());
 
-const allowedOrigins =[
-        "https://sree84s.site",
-        "http://sree84s.site",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "http://192.168.0.103:8080",
-      ];
+const allowedOrigins = [
+    "https://sree84s.site",
+    "http://sree84s.site",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://192.168.0.103:8080",
+];
 
 app.use(cors({
     origin: function (origin, callback) {
@@ -79,6 +80,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/installations', installationRoutes);
 app.use('/api/workflow', workflowRoutes);
+app.use('/api/survey', surveyRoutes);
 app.get('/api/catalog/search', authMiddleware, productController.catalogSearch);
 app.get('/api/items/search', authMiddleware, productController.catalogSearch);
 

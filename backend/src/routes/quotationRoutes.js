@@ -13,11 +13,18 @@ router.post('/generate', quotationController.generate);
 // Recalculate quotation
 router.put('/:id/recalculate', quotationController.recalculate);
 
+// Get by Ticket ID
+router.get('/ticket/:ticketId', quotationController.getByTicketId);
+
 // Update status (Admin only)
 router.put('/:id/status', requireRole('ADMIN'), quotationController.updateStatus);
 
+// Update quotation (Admin only)
+router.patch('/:id', requireRole('ADMIN'), quotationController.update);
+
 // Get PDF
 router.get('/:id/pdf', quotationController.getPDF);
+router.get('/ticket/:ticketId/pdf', quotationController.getPDFByTicketId);
 
 // Get by ID
 router.get('/:id', quotationController.getById);

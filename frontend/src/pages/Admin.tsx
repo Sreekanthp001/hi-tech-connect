@@ -152,25 +152,20 @@ const STATUS_LABELS: Record<string, string> = {
 // ─── StatusBadge ────────────────────────────────────────────────────────────
 
 const StatusBadge = ({ status }: { status: string }) => {
-    const styles: Record<string, string> = {
-        "PENDING": "bg-yellow-100 text-yellow-700 border-yellow-200 font-bold px-2 py-0.5",
-        "IN_PROGRESS": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
-        "COMPLETED": "bg-green-100 text-green-700 border-green-200 font-bold px-2 py-0.5",
-        "NEW_REQUEST": "bg-purple-100 text-purple-700 border-purple-200 font-bold px-2 py-0.5",
-        "SURVEY_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5",
-        "SURVEY_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold px-2 py-0.5",
-        "QUOTATION_SENT": "bg-orange-100 text-orange-700 border-orange-200 font-bold px-2 py-0.5",
-        "APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold px-2 py-0.5",
-        "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
-        "NEW": "bg-purple-100 text-purple-700 border-purple-200 font-bold px-2 py-0.5",
-        "SITE_VISIT_ASSIGNED": "bg-indigo-100 text-indigo-700 border-indigo-200 font-bold px-2 py-0.5",
-        "SITE_VISIT_COMPLETED": "bg-cyan-100 text-cyan-700 border-cyan-200 font-bold px-1 py-0.5",
-        "INSTALLATION_APPROVED": "bg-emerald-100 text-emerald-700 border-emerald-200 font-bold px-2 py-0.5",
-        "INSTALLATION_ASSIGNED": "bg-blue-100 text-blue-700 border-blue-200 font-bold px-2 py-0.5",
-    };
+    let styleClass = "bg-secondary text-muted-foreground border-secondary/50";
+    if (status === "PENDING" || status === "NEW_REQUEST") styleClass = "bg-purple-100 text-purple-700 border-purple-200";
+    if (status === "SURVEY_ASSIGNED" || status === "SITE_VISIT_ASSIGNED") styleClass = "bg-indigo-100 text-indigo-700 border-indigo-200";
+    if (status === "SURVEY_COMPLETED" || status === "SITE_VISIT_COMPLETED") styleClass = "bg-blue-100 text-blue-700 border-blue-200";
+    if (status === "QUOTATION_GENERATED") styleClass = "bg-orange-100 text-orange-700 border-orange-200";
+    if (status === "QUOTATION_SENT") styleClass = "bg-cyan-100 text-cyan-700 border-cyan-200";
+    if (status === "APPROVED" || status === "INSTALLATION_APPROVED") styleClass = "bg-teal-100 text-teal-700 border-teal-200";
+    if (status === "INSTALLATION_ASSIGNED" || status === "WORK_ASSIGNED" || status === "IN_PROGRESS") styleClass = "bg-accent/10 text-accent border-accent/20";
+    if (status === "COMPLETED" || status === "WORK_COMPLETED") styleClass = "bg-success/10 text-success border-success/20";
+    if (status === "REJECTED") styleClass = "bg-destructive/10 text-destructive border-destructive/20";
+
     return (
-        <Badge variant="outline" className={styles[status] || ""}>
-            {STATUS_LABELS[status] || status}
+        <Badge className={`text-[9px] font-black uppercase tracking-widest ${styleClass}`}>
+            {STATUS_LABELS[status] || status.replace(/_/g, " ")}
         </Badge>
     );
 };
@@ -651,14 +646,14 @@ const AdminDashboard = () => {
             payload = { workers: manualAssignment };
         } else {
             // From modal state
-            const workersList = [
-                { workerId: primaryWorkerId, isPrimary: true },
-                ...supportWorkerIds.map(id => ({ workerId: id, isPrimary: false }))
-            ];
-            payload = { workers: workersList };
+            payload = {
+                workerId: primaryWorkerId,
+                supportWorker1Id: supportWorkerIds[0] || null,
+                supportWorker2Id: supportWorkerIds[1] || null
+            };
         }
 
-        if (!payload.workers || payload.workers.length === 0 || !payload.workers[0].workerId) {
+        if (!payload.workerId && (!payload.workers || payload.workers.length === 0)) {
             toast.error("Please select a primary technician.");
             return;
         }
@@ -667,23 +662,22 @@ const AdminDashboard = () => {
         try {
             let endpoint = "";
             let method = "PATCH";
-            let body = JSON.stringify(payload);
 
             if (isSurveyAssign) {
                 endpoint = `/admin/assign-survey/${ticketId}`;
+                method = "POST"; // Based on adminRoutes.js
+                payload = { technicianId: primaryWorkerId };
             } else if (isPlanningAssign) {
                 endpoint = `/admin/tickets/${ticketId}/assign-planning-worker`;
-                body = JSON.stringify({ workerId: primaryWorkerId });
             } else if (isInstallationAssign) {
                 endpoint = `/admin/tickets/${ticketId}/assign-installation-worker`;
-                body = JSON.stringify({ workerId: primaryWorkerId });
             } else {
                 endpoint = `/admin/assign/${ticketId}`;
             }
 
             await apiFetch(endpoint, {
                 method,
-                body,
+                body: JSON.stringify(payload),
             });
 
             toast.success("Assignment updated successfully!");
@@ -764,6 +758,28 @@ const AdminDashboard = () => {
             fetchTickets();
         } catch (err) {
             toast.error("Failed to send quotation.");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleDownloadQuotation = async () => {
+        if (!selectedTicket) return;
+        setIsLoading(true);
+        try {
+            const res = await apiFetch(`/quotations/ticket/${selectedTicket.id}/pdf`, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Quotation-${selectedTicket.clientName.replace(/\s+/g, '-')}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            toast.error("Failed to generate PDF. Make sure quotation is finalized.");
         } finally {
             setIsLoading(false);
         }
@@ -1294,7 +1310,7 @@ const AdminDashboard = () => {
                                                                                 Assign Survey
                                                                             </Button>
                                                                         )}
-                                                                        {(t.status === "SURVEY_COMPLETED" || t.status === "QUOTATION_SENT") && (
+                                                                        {(t.status === "SURVEY_COMPLETED" || t.status === "QUOTATION_GENERATED" || t.status === "QUOTATION_SENT") && (
                                                                             <Button
                                                                                 size="sm"
                                                                                 className="h-8 text-[10px] font-bold bg-orange-600 hover:bg-orange-700"
@@ -1303,7 +1319,7 @@ const AdminDashboard = () => {
                                                                                     setIsQuoteModalOpen(true);
                                                                                 }}
                                                                             >
-                                                                                Edit Quote
+                                                                                Review Quote
                                                                             </Button>
                                                                         )}
                                                                         {t.status === "APPROVED" && (
@@ -1334,26 +1350,13 @@ const AdminDashboard = () => {
                                                                         {(t.status === "SITE_VISIT_COMPLETED" || t.status === "INSTALLATION_APPROVED" || t.status === "INSTALLATION_ASSIGNED") && (
                                                                             <Button
                                                                                 size="sm"
-                                                                                className="h-8 text-[9px] font-black uppercase bg-blue-600 hover:bg-blue-700"
+                                                                                className="h-8 text-[9px] font-black uppercase bg-cyan-600 hover:bg-cyan-700"
                                                                                 onClick={() => {
                                                                                     setIsInstallationAssign(true);
                                                                                     openAssignModal(t);
                                                                                 }}
                                                                             >
-                                                                                Assign Work
-                                                                            </Button>
-                                                                        )}
-                                                                        {t.status === "SITE_VISIT_COMPLETED" && (
-                                                                            <Button
-                                                                                size="sm"
-                                                                                className="h-8 text-[9px] font-black uppercase bg-orange-600 hover:bg-orange-700"
-                                                                                onClick={() => {
-                                                                                    setSelectedTicket(t);
-                                                                                    setIsQuoteModalOpen(true);
-                                                                                }}
-                                                                            >
-                                                                                <Eye className="h-3 w-3 mr-1" />
-                                                                                Review Quote
+                                                                                Assign Installation
                                                                             </Button>
                                                                         )}
                                                                         {t.status !== "COMPLETED" && (
@@ -2990,11 +2993,20 @@ const AdminDashboard = () => {
 
                                             <div className="flex gap-4">
                                                 <Button
-                                                    className="flex-1 h-14 bg-accent hover:bg-accent/90 text-white font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all hover:-translate-y-1 active:scale-95"
+                                                    variant="outline"
+                                                    className="flex-1 h-14 border-2 border-accent text-accent font-black uppercase tracking-widest hover:bg-accent/5 transition-all"
+                                                    onClick={handleDownloadQuotation}
+                                                    disabled={isLoading}
+                                                >
+                                                    <Download className="h-5 w-5 mr-3" />
+                                                    Download PDF
+                                                </Button>
+                                                <Button
+                                                    className="flex-[2] h-14 bg-accent hover:bg-accent/90 text-white font-black uppercase tracking-widest shadow-xl shadow-accent/20 transition-all hover:-translate-y-1 active:scale-95"
                                                     onClick={handleSendQuotation}
                                                     loading={isLoading}
                                                 >
-                                                    <Download className="h-5 w-5 mr-3" />
+                                                    <BellRing className="h-5 w-5 mr-3" />
                                                     Finalize & Send Quote
                                                 </Button>
                                             </div>
