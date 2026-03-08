@@ -363,7 +363,7 @@ const WorkerDashboard = () => {
                                                     </div>
                                                 )}
 
-                                                {task.status === "SURVEY_ASSIGNED" && (
+                                                {task.status === "SURVEY_ASSIGNED" || task.status === "SITE_VISIT_ASSIGNED" && (
                                                     <div className="mt-4 flex gap-3">
                                                         <Button
                                                             className="flex-1 bg-purple-600 hover:bg-purple-700 font-black uppercase tracking-widest gap-2 shadow-lg"
@@ -540,7 +540,7 @@ const WorkerDashboard = () => {
                                                     </Button>
                                                 )}
 
-                                                {task.status === "SURVEY_ASSIGNED" && (
+                                                {task.status === "SURVEY_ASSIGNED" || task.status === "SITE_VISIT_ASSIGNED" && (
                                                     <div className="flex flex-col gap-3">
                                                         <Button
                                                             className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold h-12 shadow-lg"
@@ -680,7 +680,7 @@ const WorkerDashboard = () => {
 
             {/* Pending Reason Modal */}
             {pendingModalTicket && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
                     <Card className="w-full max-w-md shadow-2xl relative border-none">
                         <Button
                             variant="ghost"
@@ -726,7 +726,7 @@ const WorkerDashboard = () => {
 
             {/* Payment Completion Modal */}
             {paymentModalTicket && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
                     <Card className="w-full max-w-md shadow-2xl relative border-none">
                         <Button
                             variant="ghost"
@@ -842,7 +842,7 @@ const WorkerDashboard = () => {
 
             {/* Change Password Modal */}
             {showPasswordModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
                     <Card className="w-full max-w-md shadow-2xl relative border-none">
                         <Button
                             variant="ghost"
@@ -950,7 +950,7 @@ const WorkerDashboard = () => {
             )}
 
             {isSurveyModalOpen && activeSurveyTicket && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
                     <Card className="w-full max-w-2xl shadow-2xl relative border-none max-h-[90vh] flex flex-col">
                         <Button
                             variant="ghost"
