@@ -121,6 +121,14 @@ const WorkerDashboard = () => {
 
     // Survey Modal State
     const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
+    useEffect(() => {
+        if (isSurveyModalOpen) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "";
+        }
+        return () => { document.body.style.overflow = ""; };
+    }, [isSurveyModalOpen]);
     const [activeSurveyTicket, setActiveSurveyTicket] = useState<TicketRecord | null>(null);
     const [surveyData, setSurveyData] = useState({
         numCameras: "",
@@ -329,7 +337,7 @@ const WorkerDashboard = () => {
                             </Card>
                         ) : (
                             tickets.map((task) => (
-                                <Card key={task.id} className="premium-card overflow-hidden group border-2 hover:border-blue-500/20 transition-all">
+                                <Card key={task.id} className="premium-card overflow-hidden border-2 hover:border-blue-500/20 transition-all">
                                     <CardContent className="p-0">
                                         <div className="p-6">
                                             <div className="flex justify-between items-start mb-4">
@@ -968,9 +976,9 @@ const WorkerDashboard = () => {
                             <CardDescription className="text-purple-700 font-medium italic">Requirement checklist for {activeSurveyTicket.clientName}</CardDescription>
                         </CardHeader>
 
-                        <CardContent className="p-0 overflow-hidden flex flex-col flex-1">
+                        <CardContent className="p-0 overflow-auto flex flex-col flex-1">
                             <form onSubmit={(e) => { e.preventDefault(); handleCompleteSurvey(); }} className="flex flex-col h-full">
-                                <div className="p-6 overflow-y-auto flex-1 space-y-6">
+                                <div className="p-6 overflow-y-auto flex-1 space-y-6" style={{maxHeight: "60vh"}}>
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between sticky top-0 bg-white pb-2 z-10 border-b">
                                             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Item Description</Label>

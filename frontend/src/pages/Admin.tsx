@@ -270,6 +270,7 @@ const AdminDashboard = () => {
     const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
     const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
     const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
+    const [quotationData, setQuotationData] = useState<any>(null);
     const [catalogResults, setCatalogResults] = useState<any[]>([]);
     const [itemSearchQuery, setItemSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -738,8 +739,8 @@ const AdminDashboard = () => {
     };
 
     const calculateQuoteTotal = () => {
-        if (!selectedTicket || !selectedTicket.items) return 0;
-        return selectedTicket.items.reduce((acc: number, item: any) => acc + (item.quantity * item.price), 0);
+        if (!quotationData || !quotationData.items) return 0;
+        return quotationData.items.reduce((acc: number, item: any) => acc + (item.quantity * item.unitPrice), 0);
     };
 
     const handleSendQuotation = async () => {
@@ -1313,9 +1314,15 @@ const AdminDashboard = () => {
                                                                             <Button
                                                                                 size="sm"
                                                                                 className="h-8 text-[10px] font-bold bg-orange-600 hover:bg-orange-700"
-                                                                                onClick={() => {
+                                                                                onClick={async () => {
                                                                                     setSelectedTicket(t);
                                                                                     setIsQuoteModalOpen(true);
+                                                                                    try {
+                                                                                        const r = await apiFetch(`/quotations/ticket/${t.id}`);
+                                                                                        setQuotationData(r.data);
+                                                                                    } catch(e) {
+                                                                                        setQuotationData(null);
+                                                                                    }
                                                                                 }}
                                                                             >
                                                                                 Review Quote
@@ -2930,16 +2937,16 @@ const AdminDashboard = () => {
                                         </div>
 
                                         <div className="flex-1 overflow-y-auto space-y-3">
-                                            {(!selectedTicket.items || selectedTicket.items.length === 0) ? (
+                                            {(!quotationData || !quotationData.items || quotationData.items.length === 0) ? (
                                                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground italic space-y-2">
                                                     <Search className="h-8 w-8 opacity-20" />
                                                     <p className="text-xs">No items linked to this ticket.</p>
                                                 </div>
                                             ) : (
-                                                selectedTicket.items.map((item: any, idx: number) => (
+                                                (quotationData?.items || []).map((item: any, idx: number) => (
                                                     <div key={idx} className="flex flex-col sm:flex-row items-center gap-4 p-4 border rounded-xl bg-white shadow-sm hover:border-primary/30 transition-colors group">
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-xs font-black uppercase truncate group-hover:text-primary transition-colors">{item.itemName}</p>
+                                                            <p className="text-xs font-black uppercase truncate group-hover:text-primary transition-colors">{item.name}</p>
                                                             <p className="text-[9px] text-muted-foreground font-medium">Technician Suggested Part</p>
                                                         </div>
                                                         <div className="flex items-center gap-4 w-full sm:w-auto">
@@ -2957,12 +2964,12 @@ const AdminDashboard = () => {
                                                                 <Input
                                                                     type="number"
                                                                     className="h-9 font-bold text-center text-primary"
-                                                                    value={item.price}
-                                                                    onChange={(e) => updateQuoteItem(idx, 'price', e.target.value)}
+                                                                    value={item.unitPrice}
+                                                                    onChange={(e) => updateQuoteItem(idx, 'unitPrice', e.target.value)}
                                                                 />
                                                             </div>
                                                             <div className="flex items-center justify-center h-9 mt-5 px-3 bg-secondary/20 rounded-lg min-w-[100px]">
-                                                                <span className="text-xs font-black">₹{(item.quantity * item.price).toLocaleString()}</span>
+                                                                <span className="text-xs font-black">₹{(item.quantity * item.unitPrice).toLocaleString()}</span>
                                                             </div>
                                                             <Button
                                                                 variant="ghost"

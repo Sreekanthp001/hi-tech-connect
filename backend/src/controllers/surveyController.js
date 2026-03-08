@@ -83,7 +83,11 @@ exports.submitSurvey = async (req, res) => {
                 where: { id: ticket.id },
                 data: {
                     status: 'QUOTATION_GENERATED',
-                    quotationStatus: 'PENDING'
+                    quotationStatus: 'PENDING',
+                    numCameras: quotation.cameraCount,
+                    cableLength: quotation.wireLength,
+                    nvrDvrType: quotation.cameraType,
+                    surveyNotes: notes
                 }
             });
 
