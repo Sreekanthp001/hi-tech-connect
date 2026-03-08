@@ -778,6 +778,11 @@ const AdminDashboard = () => {
             link.click();
             link.remove();
             window.URL.revokeObjectURL(url);
+            // Auto open assign team modal after download
+            setIsQuoteModalOpen(false);
+            setIsInstallationAssign(true);
+            setIsPlanningAssign(false);
+            openAssignModal(selectedTicket);
         } catch (err) {
             toast.error("Failed to generate PDF. Make sure quotation is finalized.");
         } finally {
@@ -1299,6 +1304,7 @@ const AdminDashboard = () => {
                                                                 {t.status !== "COMPLETED" && (
                                                                     <div className="flex gap-2">
                                                                         {t.status === "NEW_REQUEST" && (
+                                                                            <>
                                                                             <Button
                                                                                 size="sm"
                                                                                 className="h-8 text-[10px] font-bold bg-purple-600 hover:bg-purple-700"
@@ -1309,6 +1315,17 @@ const AdminDashboard = () => {
                                                                             >
                                                                                 Assign Survey
                                                                             </Button>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[10px] font-bold bg-cyan-600 hover:bg-cyan-700"
+                                                                                onClick={() => {
+                                                                                    setIsInstallationAssign(true);
+                                                                                    openAssignModal(t);
+                                                                                }}
+                                                                            >
+                                                                                Direct Assign
+                                                                            </Button>
+                                                                            </>
                                                                         )}
                                                                         {(t.status === "SURVEY_COMPLETED" || t.status === "QUOTATION_GENERATED" || t.status === "QUOTATION_SENT") && (
                                                                             <Button
@@ -1353,7 +1370,7 @@ const AdminDashboard = () => {
                                                                                 Assign Planning
                                                                             </Button>
                                                                         )}
-                                                                        {(t.status === "SITE_VISIT_COMPLETED" || t.status === "INSTALLATION_APPROVED" || t.status === "INSTALLATION_ASSIGNED") && (
+                                                                        {(t.status === "SITE_VISIT_COMPLETED" || t.status === "INSTALLATION_APPROVED" || t.status === "INSTALLATION_ASSIGNED" || t.status === "QUOTATION_SENT") && (
                                                                             <Button
                                                                                 size="sm"
                                                                                 className="h-8 text-[9px] font-black uppercase bg-cyan-600 hover:bg-cyan-700"
@@ -1363,6 +1380,18 @@ const AdminDashboard = () => {
                                                                                 }}
                                                                             >
                                                                                 Assign Installation
+                                                                            </Button>
+                                                                        )}
+                                                                        {(t.status === "INSTALLATION_ASSIGNED" || t.status === "IN_PROGRESS") && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                className="h-8 text-[9px] font-black uppercase bg-green-600 hover:bg-green-700"
+                                                                                onClick={() => {
+                                                                                    setPaymentData(p => ({ ...p, ticketId: t.id }));
+                                                                                    setIsPaymentSheetOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                💰 Payment
                                                                             </Button>
                                                                         )}
                                                                         {t.status !== "COMPLETED" && (
