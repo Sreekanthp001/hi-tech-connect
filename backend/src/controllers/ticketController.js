@@ -359,7 +359,7 @@ exports.updateStatus = async (req, res) => {
 // 6. Admin: Ticket history / timeline
 exports.getTicketHistory = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
 
         const ticket = await prisma.ticket.findUnique({
             where: { id },
@@ -564,7 +564,7 @@ exports.addPayment = async (req, res) => {
  */
 exports.updateProgress = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { progress } = req.body;
         const userId = req.user.userId;
 
@@ -600,7 +600,7 @@ exports.updateProgress = async (req, res) => {
  */
 exports.assignPlanningWorker = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { workerId } = req.body;
 
         const updatedTicket = await prisma.ticket.update({
@@ -634,7 +634,7 @@ exports.assignPlanningWorker = async (req, res) => {
  */
 exports.assignInstallationWorker = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { workerId } = req.body;
 
         const updatedTicket = await prisma.ticket.update({
@@ -699,10 +699,10 @@ exports.getClientTickets = async (req, res) => {
  */
 exports.uploadTicketPhoto = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { type } = req.body;
 
-        if (!req.file) {
+        if (!req.files || req.files.length === 0) {
             return res.status(400).json({ error: "No image file provided" });
         }
 
@@ -720,7 +720,7 @@ exports.uploadTicketPhoto = async (req, res) => {
 
         // Process image with Sharp: resize to max width 1280, compress to 75% quality
         // If the file is small (< 500KB), we might skip resizing but the user wants optimization for all
-        await sharp(req.file.buffer)
+        await sharp(req.files[0].buffer)
             .resize({ width: 1280, withoutEnlargement: true, fit: 'inside' })
             .jpeg({ quality: 75 })
             .toFile(outputPath);
@@ -779,7 +779,7 @@ exports.uploadTicketPhoto = async (req, res) => {
  */
 exports.getTicketPhotos = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const photos = await prisma.ticketPhoto.findMany({
             where: { ticketId: id },
             orderBy: { createdAt: 'desc' }
@@ -797,7 +797,7 @@ exports.getTicketPhotos = async (req, res) => {
  */
 exports.deleteTicket = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
 
         // Check if ticket exists
         const ticket = await prisma.ticket.findUnique({
@@ -833,7 +833,7 @@ exports.deleteTicket = async (req, res) => {
  */
 exports.submitTicketItems = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { items, numCameras, cableLength, nvrDvrType, hardDiskType, powerSupply, surveyNotes } = req.body;
 
         if (!items || !Array.isArray(items)) {
@@ -884,7 +884,7 @@ exports.submitTicketItems = async (req, res) => {
  */
 exports.getQuotation = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const ticket = await prisma.ticket.findUnique({
             where: { id },
             include: { items: true }
@@ -911,7 +911,7 @@ exports.getQuotation = async (req, res) => {
  */
 exports.updateQuotation = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { items } = req.body;
 
         if (!items || !Array.isArray(items)) {
@@ -1018,7 +1018,7 @@ exports.updateQuotation = async (req, res) => {
  */
 exports.sendQuotation = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const updatedTicket = await prisma.ticket.update({
             where: { id },
             data: {
@@ -1039,7 +1039,7 @@ exports.sendQuotation = async (req, res) => {
  */
 exports.handleCustomerAction = async (req, res) => {
     try {
-        const { id } = req.params;
+        const id = req.params.ticketId || req.params.id;
         const { action } = req.body; // 'APPROVE' or 'REJECT'
 
         if (!['APPROVE', 'REJECT'].includes(action)) {

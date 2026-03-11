@@ -13,7 +13,7 @@ router.use(requireRole('WORKER'));
 router.get('/tickets', workerController.getWorkerTickets);
 router.patch('/tickets/:ticketId/status', ticketController.updateStatus);
 router.patch('/tickets/:id/progress', ticketController.updateProgress);
-router.post('/tickets/:ticketId/upload-photo', upload.single('photo'), ticketController.uploadTicketPhoto);
+router.post('/tickets/:ticketId/upload-photo', upload.any(), ticketController.uploadTicketPhoto);
 router.patch('/tickets/:ticketId/items', ticketController.submitTicketItems);
 router.post('/change-password', authController.changePassword);
 
