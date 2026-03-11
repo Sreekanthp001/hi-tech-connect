@@ -251,14 +251,14 @@ exports.updateStatus = async (req, res) => {
 
         const currentTicket = await prisma.ticket.findUnique({
             where: { id: ticketId },
-            include: { assignments: true }
+            include: { assignments: true },
         });
 
         if (!currentTicket) {
             return res.status(404).json({ error: "Ticket not found" });
         }
 
-        const isAssigned = currentTicket.assignments.some(a => a.workerId === req.user.userId);
+        const isAssigned = currentTicket.assignments.some(a => a.workerId === req.user.userId) || currentTicket.installationWorkerId === req.user.userId || currentTicket.planningWorkerId === req.user.userId || currentTicket.supportWorker1Id === req.user.userId || currentTicket.supportWorker2Id === req.user.userId;
         if (!isAssigned) {
             return res.status(403).json({ error: "You are not assigned to this ticket" });
         }
