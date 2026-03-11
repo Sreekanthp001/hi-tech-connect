@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Bell, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import api from "@/lib/api";
+import apiFetch from "@/lib/api";
 import { toast } from "sonner";
 
 interface Notification {
@@ -20,7 +20,7 @@ const NotificationBell = () => {
 
     const fetchNotifications = async () => {
         try {
-            const res = await api.get("/notifications");
+            const res = await apiFetch("/notifications");
             setNotifications(res.data);
         } catch (err) {
             console.error("Failed to fetch notifications");
@@ -29,7 +29,7 @@ const NotificationBell = () => {
 
     const markAsRead = async (id: string) => {
         try {
-            await api.patch(`/notifications/${id}/read`);
+            await apiFetch(`/notifications/${id}/read`, { method: "PATCH" });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
         } catch (err) {
             toast.error("Failed to mark notification as read");
@@ -38,7 +38,7 @@ const NotificationBell = () => {
 
     const markAllAsRead = async () => {
         try {
-            await api.patch("/notifications/read-all");
+            await apiFetch("/notifications/read-all", { method: "PATCH" });
             setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
             toast.success("All notifications marked as read");
         } catch (err) {
