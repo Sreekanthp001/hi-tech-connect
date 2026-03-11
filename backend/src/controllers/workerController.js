@@ -15,6 +15,7 @@ exports.getWorkerTickets = async (req, res) => {
         NOT: { status: "COMPLETED" }
       },
       include: {
+        ticketPhotos: true,
         assignments: {
           include: {
             worker: { select: { id: true, name: true, email: true } }
