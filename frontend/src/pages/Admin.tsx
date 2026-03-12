@@ -267,15 +267,6 @@ const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "salary" | "inventory">("tickets");
     
     // Inventory state
-    const [inventoryStats, setInventoryStats] = useState({ totalItems: 0, totalStock: 0, todayUsed: 0, lowStockAlerts: 0 });
-    const [inventoryLoading, setInventoryLoading] = useState(false);
-    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
-    const [inventoryHistory, setInventoryHistory] = useState<any[]>([]);
-    const [dailyUsageReport, setDailyUsageReport] = useState<any>(null);
-    const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
-    const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState<any>(null);
-    const [stockAdjustment, setStockAdjustment] = useState({ quantity: "", type: "IN", reason: "PURCHASE", notes: "" });
 
     // Revenue breakdown state
     const [revenueBreakdown, setRevenueBreakdown] = useState<RevenueBreakdown | null>(null);
