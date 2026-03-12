@@ -31,27 +31,6 @@ exports.search = async (req, res) => {
     }
 };
 
-// Autocomplete search for ItemsCatalog (Admin only)
-exports.catalogSearch = async (req, res) => {
-    try {
-        const { q } = req.query;
-        if (!q || q.length < 1) {
-            return res.status(200).json([]);
-        }
-
-        const items = await prisma.itemsCatalog.findMany({
-            where: {
-                name: { contains: q, mode: 'insensitive' }
-            },
-            take: 10
-        });
-
-        res.status(200).json(items);
-    } catch (error) {
-        console.error("Catalog search error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-};
 
 // Get all products (Admin)
 exports.getAll = async (req, res) => {
@@ -87,6 +66,31 @@ exports.update = async (req, res) => {
         });
         res.status(200).json(product);
     } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// Delete product
+exports.delete = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Check if there are any transactions for this product
+        const txCount = await prisma.stockTransaction.count({ where: { productId: id } });
+        
+        if (txCount > 0) {
+            // Cannot delete if transactions exist, just deactivate
+            await prisma.productMaster.update({
+                where: { id },
+                data: { isActive: false }
+            });
+            return res.status(200).json({ message: "Product has transaction history and cannot be deleted. It has been marked as inactive." });
+        }
+
+        await prisma.productMaster.delete({ where: { id } });
+        res.status(200).json({ message: "Product deleted successfully" });
+    } catch (error) {
+        console.error("Delete product error:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 };

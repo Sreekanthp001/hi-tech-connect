@@ -82,20 +82,23 @@ exports.completeSiteVisit = async (req, res) => {
             return res.status(400).json({ error: "Site survey notes are mandatory." });
         }
 
-        // Auto-generation based on ItemsCatalog
+        // Auto-generation based on ProductMaster
         let quotationItems = [];
         let subtotal = 0;
 
-        // Helper to add item from catalog
+        // Helper to add item from product master
         const addItem = async (name, qty) => {
             if (!qty || qty <= 0) return;
-            const item = await prisma.itemsCatalog.findUnique({ where: { name } });
-            if (item) {
-                const lineTotal = item.price * qty;
+            const product = await prisma.productMaster.findFirst({ 
+                where: { name: { equals: name, mode: 'insensitive' } } 
+            });
+            if (product) {
+                const lineTotal = product.sellingPrice * qty;
                 subtotal += lineTotal;
                 quotationItems.push({
-                    name: item.name,
-                    unitPrice: item.price,
+                    name: product.name,
+                    productId: product.id,
+                    unitPrice: product.sellingPrice,
                     quantity: qty,
                     totalPrice: lineTotal
                 });
@@ -105,8 +108,7 @@ exports.completeSiteVisit = async (req, res) => {
         // Standard logic for CCTV packages
         if (numCameras > 0) {
             // 1. Map Cameras
-            // Try to find a default camera or one containing 'CAMERA'
-            const defaultCamera = await prisma.itemsCatalog.findFirst({
+            const defaultCamera = await prisma.productMaster.findFirst({
                 where: { name: { contains: 'CAMERA', mode: 'insensitive' } }
             });
             if (defaultCamera) {
@@ -114,7 +116,7 @@ exports.completeSiteVisit = async (req, res) => {
             }
 
             // 2. Map Cable
-            const defaultCable = await prisma.itemsCatalog.findFirst({
+            const defaultCable = await prisma.productMaster.findFirst({
                 where: { name: { contains: 'CAT6', mode: 'insensitive' } }
             });
             if (defaultCable) {
@@ -127,7 +129,7 @@ exports.completeSiteVisit = async (req, res) => {
             if (powerSupply) await addItem(powerSupply, 1);
 
             // 4. Installation Charges
-            const installCharge = await prisma.itemsCatalog.findFirst({
+            const installCharge = await prisma.productMaster.findFirst({
                 where: { name: { contains: 'INSTALLATION', mode: 'insensitive' } }
             });
             if (installCharge) {

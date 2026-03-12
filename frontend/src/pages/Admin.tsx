@@ -12,7 +12,7 @@ import {
     Users, Ticket, CheckCircle2, AlertCircle, ArrowUpRight,
     RefreshCw, TrendingUp, UserPlus, Key, Trash2, MapPin, Plus, X, Copy,
     Search, CreditCard, History, ArrowLeft, Building, Clock, Phone, Download, Camera,
-    Bell, ShieldAlert, CalendarClock, Edit3, MinusCircle, BellRing, Eye
+    Bell, ShieldAlert, CalendarClock, Edit3, MinusCircle, BellRing, Eye, Package, Box, ClipboardList
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import apiFetch from "@/lib/api";
@@ -35,7 +35,7 @@ interface TicketRecord {
     description: string;
     clientName: string;
     type: string;
-    status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "NEW_REQUEST" | "SURVEY_ASSIGNED" | "SURVEY_COMPLETED" | "QUOTATION_GENERATED" | "QUOTATION_SENT" | "WAITING_CUSTOMER_APPROVAL" | "APPROVED" | "INSTALLATION_ASSIGNED" | "WORK_ASSIGNED" | "WORK_COMPLETED";
+    status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "SUBMITTED" | "NEW_REQUEST" | "SURVEY_ASSIGNED" | "SURVEY_COMPLETED" | "QUOTATION_GENERATED" | "QUOTATION_SENT" | "WAITING_CUSTOMER_APPROVAL" | "APPROVED" | "INSTALLATION_ASSIGNED" | "WORK_ASSIGNED" | "WORK_COMPLETED" | "NEW" | "SITE_VISIT_ASSIGNED" | "SITE_VISIT_COMPLETED" | "INSTALLATION_APPROVED";
     requestType?: string;
     alternatePhone?: string;
     numCameras?: number;
@@ -246,8 +246,36 @@ const AdminDashboard = () => {
     });
     const [creatingExpense, setCreatingExpense] = useState(false);
 
+    // Inventory state
+    const [inventoryStats, setInventoryStats] = useState({ totalItems: 0, totalStock: 0, lowStockAlerts: 0, todayUsed: 0 });
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+    const [inventoryHistory, setInventoryHistory] = useState<any[]>([]);
+    const [inventoryLoading, setInventoryLoading] = useState(false);
+    const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+    const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState<any>(null);
+    const [dailyUsageReport, setDailyUsageReport] = useState<any>(null);
+    const [stockAdjustment, setStockAdjustment] = useState({ type: "IN", quantity: "", reason: "PURCHASE", notes: "" });
+    const [newItem, setNewItem] = useState({ name: "", category: "HARDWARE", description: "", unitType: "pcs", minStock: "5" });
+
+    // Ticket Material state
+    const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+    const [ticketMaterials, setTicketMaterials] = useState<any[]>([]);
+    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1" });
+
     // Active tab
-    const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "salary">("tickets");
+    const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "salary" | "inventory">("tickets");
+    
+    // Inventory state
+    const [inventoryStats, setInventoryStats] = useState({ totalItems: 0, totalStock: 0, todayUsed: 0, lowStockAlerts: 0 });
+    const [inventoryLoading, setInventoryLoading] = useState(false);
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+    const [inventoryHistory, setInventoryHistory] = useState<any[]>([]);
+    const [dailyUsageReport, setDailyUsageReport] = useState<any>(null);
+    const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+    const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
+    const [selectedProduct, setSelectedProduct] = useState<any>(null);
+    const [stockAdjustment, setStockAdjustment] = useState({ quantity: "", type: "IN", reason: "PURCHASE", notes: "" });
 
     // Revenue breakdown state
     const [revenueBreakdown, setRevenueBreakdown] = useState<RevenueBreakdown | null>(null);
@@ -1006,6 +1034,134 @@ const AdminDashboard = () => {
         { name: "In Progress", value: tickets.filter(t => t.status === "INSTALLATION_ASSIGNED" || t.status === "WORK_ASSIGNED").length, color: "#3b82f6" },
         { name: "Completed", value: tickets.filter(t => t.status === "COMPLETED").length, color: "#22c55e" },
     ];
+    const fetchInventoryStats = async () => {
+        try {
+            const res = await apiFetch("/inventory/dashboard");
+            setInventoryStats(res.data);
+        } catch (e) {
+            console.error("Failed to fetch inventory stats");
+        }
+    };
+
+    const fetchInventoryItems = async () => {
+        setInventoryLoading(true);
+        try {
+            const res = await apiFetch("/products");
+            setInventoryItems(res.data);
+        } catch (e) {
+            toast.error("Failed to fetch inventory items");
+        } finally {
+            setInventoryLoading(false);
+        }
+    };
+
+    const fetchDailyUsageReport = async () => {
+        try {
+            const res = await apiFetch("/inventory/report");
+            setDailyUsageReport(res.data);
+        } catch (e) {
+            toast.error("Failed to fetch daily usage report");
+        }
+    };
+
+    const handleAdjustStock = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            const endpoint = stockAdjustment.type === "IN" ? "/inventory/add" : "/inventory/issue";
+            await apiFetch(endpoint, {
+                method: "POST",
+                body: {
+                    productId: selectedProduct.id,
+                    quantity: Number(stockAdjustment.quantity),
+                    referenceType: stockAdjustment.reason,
+                    notes: stockAdjustment.notes
+                }
+            });
+            toast.success("Stock adjusted successfully!");
+            setIsAdjustStockModalOpen(false);
+            fetchInventoryItems();
+            fetchInventoryStats();
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to adjust stock");
+        }
+    };
+
+    const fetchTicketMaterials = async (ticketId: string) => {
+        try {
+            const res = await apiFetch(`/inventory/ticket/${ticketId}`);
+            setTicketMaterials(res.data);
+        } catch (e) {
+            toast.error("Failed to fetch ticket materials");
+        }
+    };
+
+    const handleAddMaterial = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!materialForm.productId) {
+            toast.error("Please select a product");
+            return;
+        }
+        try {
+            await apiFetch(`/inventory/ticket/add`, {
+                method: "POST",
+                body: {
+                    ticketId: selectedTicket.id,
+                    productId: materialForm.productId,
+                    quantity: Number(materialForm.quantity)
+                }
+            });
+            toast.success("Material added to ticket");
+            fetchTicketMaterials(selectedTicket.id);
+            setMaterialForm({ productId: "", quantity: "1" });
+            fetchInventoryStats(); // Update stock counts
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to add material");
+        }
+    };
+
+    const handleRemoveMaterial = async (ticketItemId: string) => {
+        try {
+            await apiFetch(`/inventory/ticket/remove`, {
+                method: "POST",
+                body: { ticketItemId }
+            });
+            toast.success("Material removed");
+            fetchTicketMaterials(selectedTicket.id);
+            fetchInventoryStats(); // Update stock counts
+        } catch (err: any) {
+            toast.error("Failed to remove material");
+        }
+    };
+
+    const fetchProductHistory = async (product: any) => {
+        setSelectedProduct(product);
+        setInventoryLoading(true);
+        try {
+            const res = await apiFetch(`/inventory/history/${product.id}`);
+            setInventoryHistory(res.data.history);
+            setDailyUsageReport(null); // Switch view to history
+        } catch (e) {
+            toast.error("Failed to fetch item history");
+        } finally {
+            setInventoryLoading(false);
+        }
+    };
+
+    const handleDeleteInventoryItem = async (id: string, name: string) => {
+        if (!window.confirm(`Are you sure you want to delete "${name}"? If it has transaction history, it will be deactivated instead.`)) {
+            return;
+        }
+
+        try {
+            await apiFetch(`/inventory/products/${id}`, { method: "DELETE" });
+            toast.success("Item deleted/deactivated successfully");
+            fetchInventoryItems();
+            fetchInventoryStats();
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to delete item");
+        }
+    };
+
     // Follow-up Alerts Logic
     const followUpTickets = tickets.filter(t =>
         t.status === "QUOTATION_SENT" &&
@@ -1087,10 +1243,35 @@ const AdminDashboard = () => {
                             </CardContent>
                         </Card>
                     ))}
+                    {/* Store Module Card */}
+                    <Card 
+                        className="premium-card overflow-hidden group border-accent/20 bg-accent/5 cursor-pointer hover:bg-accent/10 transition-all"
+                        onClick={() => { setActiveTab("inventory"); fetchInventoryItems(); fetchInventoryStats(); }}
+                    >
+                        <CardContent className="flex items-center gap-4 p-6 relative">
+                            <div className="rounded-xl bg-accent text-white p-4 transition-transform group-hover:scale-110 shadow-lg shadow-accent/20">
+                                <Package className="h-6 w-6" />
+                            </div>
+                            <div>
+                                <p className="text-xs font-black uppercase tracking-widest text-accent">Store / Inventory</p>
+                                <p className="text-2xl font-black tracking-tight text-accent">Manage</p>
+                            </div>
+                            <div className="absolute bottom-2 right-4 flex gap-3">
+                                <div className="text-right">
+                                    <p className="text-[8px] font-bold uppercase text-muted-foreground">Alerts</p>
+                                    <p className="text-xs font-black text-destructive">{inventoryStats.lowStockAlerts}</p>
+                                </div>
+                                <div className="text-right border-l pl-3">
+                                    <p className="text-[8px] font-bold uppercase text-muted-foreground">Items</p>
+                                    <p className="text-xs font-black">{inventoryStats.totalItems}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
 
                 <div className="mb-6 flex gap-1 rounded-xl border bg-card p-1 w-fit overflow-x-auto max-w-full">
-                    {(["tickets", "analytics", "salary", "expenses", "customers", "performance", "workers"] as const).map((tab) => (
+                    {(["tickets", "analytics", "inventory", "salary", "expenses", "customers", "performance", "workers"] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => {
@@ -1115,7 +1296,8 @@ const AdminDashboard = () => {
                             {tab === "customers" && <Users className="h-4 w-4" />}
                             {tab === "performance" && <TrendingUp className="h-4 w-4" />}
                             {tab === "workers" && <Users className="h-4 w-4" />}
-                            {tab === "salary" ? "Worker Salary" : tab}
+                            {tab === "inventory" && <Package className="h-4 w-4" />}
+                            {tab === "salary" ? "Worker Salary" : tab === "inventory" ? "Store / Inventory" : tab}
                         </button>
                     ))}
                 </div>
@@ -1278,6 +1460,20 @@ const AdminDashboard = () => {
                                                         </td>
                                                         <td className="py-3">
                                                             <div className="flex gap-2 items-center">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-100"
+                                                                    title="Manage Materials"
+                                                                    onClick={() => {
+                                                                        setSelectedTicket(t);
+                                                                        setIsMaterialModalOpen(true);
+                                                                        fetchTicketMaterials(t.id);
+                                                                        if (inventoryItems.length === 0) fetchInventoryItems();
+                                                                    }}
+                                                                >
+                                                                    <Box className="h-4 w-4" />
+                                                                </Button>
                                                                 {t.status === "COMPLETED" && (
                                                                     <Button
                                                                         variant="ghost"
@@ -2230,6 +2426,7 @@ const AdminDashboard = () => {
                                                 </div>
                                             </CardContent>
                                         </Card>
+                                    </div>
 
                                         {/* History Tabs/Timeline */}
                                         <div className="md:col-span-2 space-y-6">
@@ -2400,9 +2597,222 @@ const AdminDashboard = () => {
                                                 </CardContent>
                                             </Card>
                                         </div>
-                                    </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+
+                {/* ── STORE / INVENTORY TAB ─────────────────────────────────────────── */}
+                {
+                    activeTab === "inventory" && (
+                        <div className="grid gap-8 stagger-fade-in">
+                            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+                                <div>
+                                    <h2 className="text-2xl font-bold flex items-center gap-2">
+                                        <Package className="h-6 w-6 text-accent" /> Store & Inventory Management
+                                    </h2>
+                                    <p className="text-muted-foreground">Monitor stock levels, track movements, and manage item master.</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" onClick={() => { fetchInventoryItems(); fetchInventoryStats(); fetchDailyUsageReport(); }} loading={inventoryLoading}>
+                                        <RefreshCw className={`h-4 w-4 mr-2 ${inventoryLoading ? 'animate-spin' : ''}`} />
+                                        Refresh Store
+                                    </Button>
+                                    <Button size="sm" className="bg-accent hover:bg-accent/90 gap-2" onClick={() => setIsAddItemModalOpen(true)}>
+                                        <Plus className="h-4 w-4" /> Add New Item
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Inventory Stats Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <Card className="premium-card bg-blue-50/50 border-blue-100">
+                                    <CardContent className="p-6">
+                                        <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Total Items</p>
+                                        <p className="text-2xl font-black text-blue-600">{inventoryStats.totalItems}</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className="premium-card bg-emerald-50/50 border-emerald-100">
+                                    <CardContent className="p-6">
+                                        <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Stock Units</p>
+                                        <p className="text-2xl font-black text-emerald-600">{inventoryStats.totalStock}</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className="premium-card bg-purple-50/50 border-purple-100">
+                                    <CardContent className="p-6">
+                                        <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Today's Usage</p>
+                                        <p className="text-2xl font-black text-purple-600">{inventoryStats.todayUsed}</p>
+                                    </CardContent>
+                                </Card>
+                                <Card className={`premium-card ${inventoryStats.lowStockAlerts > 0 ? 'bg-destructive/10 border-destructive/20' : 'bg-slate-50 border-slate-100'}`}>
+                                    <CardContent className="p-6">
+                                        <p className="text-[10px] font-black uppercase text-muted-foreground mb-1">Low Stock Alerts</p>
+                                        <p className={`text-2xl font-black ${inventoryStats.lowStockAlerts > 0 ? 'text-destructive' : 'text-slate-400'}`}>{inventoryStats.lowStockAlerts}</p>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Inventory Management Tabs */}
+                            <Card className="premium-card">
+                                <CardHeader className="pb-0 border-b">
+                                    <div className="flex gap-6">
+                                        {["Items List", "Daily Usage Summary", "History"].map(subTab => (
+                                            <button
+                                                key={subTab}
+                                                className={`pb-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${
+                                                    (subTab === "Items List" && !dailyUsageReport && inventoryHistory.length === 0) || 
+                                                    (subTab === "Daily Usage Summary" && dailyUsageReport) ||
+                                                    (subTab === "History" && inventoryHistory.length > 0)
+                                                    ? "border-accent text-accent" : "border-transparent text-muted-foreground"
+                                                }`}
+                                                onClick={() => {
+                                                    if (subTab === "Items List") { setDailyUsageReport(null); setInventoryHistory([]); }
+                                                    if (subTab === "Daily Usage Summary") fetchDailyUsageReport();
+                                                    if (subTab === "History") { /* History is triggered by item click, but we can clear others */ }
+                                                }}
+                                            >
+                                                {subTab}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    {inventoryHistory.length > 0 ? (
+                                        <div className="p-6">
+                                            <div className="mb-6 flex justify-between items-center bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase text-blue-700 tracking-widest">Transaction History</p>
+                                                    <p className="text-xl font-black">{selectedProduct?.name}</p>
+                                                </div>
+                                                <Button variant="outline" size="sm" onClick={() => setInventoryHistory([])}>
+                                                    Back to List
+                                                </Button>
+                                            </div>
+
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead className="border-b text-muted-foreground bg-secondary/10">
+                                                        <tr>
+                                                            {["Date", "Type", "Ref", "Qty", "User", "Ticket"].map((h) => (
+                                                                <th key={h} className="p-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                                                            ))}
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y">
+                                                        {inventoryHistory.map((h: any) => (
+                                                            <tr key={h.id} className="hover:bg-secondary/10">
+                                                                <td className="p-4 text-xs">{new Date(h.createdAt).toLocaleString()}</td>
+                                                                <td className="p-4">
+                                                                    <Badge className={h.transactionType === 'IN' ? 'bg-emerald-500' : h.transactionType === 'OUT' ? 'bg-orange-500' : 'bg-blue-500'}>
+                                                                        {h.transactionType}
+                                                                    </Badge>
+                                                                </td>
+                                                                <td className="p-4 text-[10px] font-bold">{h.referenceType}</td>
+                                                                <td className="p-4 font-black">{h.quantity}</td>
+                                                                <td className="p-4 text-[10px]">{h.worker?.name || "Admin"}</td>
+                                                                <td className="p-4 text-[10px] italic">{h.ticket?.clientName || "—"}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    ) : !dailyUsageReport ? (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left text-sm">
+                                                <thead className="border-b text-muted-foreground bg-secondary/10">
+                                                    <tr>
+                                                        {["Item Name", "Category", "In Stock", "Description", "Actions"].map((h) => (
+                                                            <th key={h} className="p-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y">
+                                                    {inventoryItems.map((item) => (
+                                                        <tr key={item.id} className="hover:bg-secondary/10">
+                                                            <td className="p-4 font-bold text-xs">{item.name}</td>
+                                                            <td className="p-4">
+                                                                <Badge variant="outline" className="text-[9px] uppercase font-black">{item.category}</Badge>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                <span className={`font-black text-sm ${item.currentStock < 5 ? 'text-destructive' : 'text-slate-700'}`}>
+                                                                    {item.currentStock ?? 0} {item.unitType || 'pcs'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-[10px] text-muted-foreground">{item.description || "—"}</td>
+                                                            <td className="p-4">
+                                                                <div className="flex gap-2">
+                                                                    <Button 
+                                                                        variant="outline" 
+                                                                        size="sm" 
+                                                                        className="h-8 text-[10px] uppercase font-black border-accent/20 text-accent hover:bg-accent/5"
+                                                                        onClick={() => { setSelectedProduct(item); setStockAdjustment({ ...stockAdjustment, quantity: "1" }); setIsAdjustStockModalOpen(true); }}
+                                                                    >
+                                                                        Adjust Stock
+                                                                    </Button>
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => fetchProductHistory(item)}>
+                                                                        <History className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteInventoryItem(item.id, item.name)}>
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                    {inventoryItems.length === 0 && (
+                                                        <tr>
+                                                            <td colSpan={5} className="p-8 text-center text-muted-foreground italic">No items found.</td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className="p-6">
+                                            <div className="mb-6 flex justify-between items-center bg-purple-50 p-4 rounded-xl border border-purple-100">
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase text-purple-700 tracking-widest">Usage Report</p>
+                                                    <p className="text-xl font-black">Daily Usage Summary</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xs font-bold text-purple-600 italic">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                                                    <p className="text-2xl font-black">Total: {dailyUsageReport.totalQuantity} items</p>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="grid md:grid-cols-2 gap-8">
+                                                <div>
+                                                    <h3 className="text-sm font-black uppercase text-muted-foreground tracking-widest mb-4">Item Wise Breakdown</h3>
+                                                    <div className="space-y-3">
+                                                        {dailyUsageReport.summarized.map((s: any) => (
+                                                            <div key={s.name} className="flex justify-between items-center p-3 border rounded-lg bg-white shadow-sm">
+                                                                <span className="font-bold text-xs">{s.name}</span>
+                                                                <Badge className="bg-purple-600 font-bold">{s.quantity} units</Badge>
+                                                            </div>
+                                                        ))}
+                                                        {dailyUsageReport.summarized.length === 0 && <p className="text-sm italic text-muted-foreground">No items used today.</p>}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-sm font-black uppercase text-muted-foreground tracking-widest mb-4">Recent Movements</h3>
+                                                    <div className="space-y-4">
+                                                        {dailyUsageReport.transactions.map((t: any) => (
+                                                            <div key={t.id} className="relative pl-6 before:absolute before:left-0 before:top-2 before:bottom-0 before:w-1 before:bg-secondary">
+                                                                <p className="text-[10px] font-black text-accent uppercase">{new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                                                <p className="font-bold text-sm">{t.product.name} — {t.quantity} qty</p>
+                                                                <p className="text-[10px] text-muted-foreground">Issued to <span className="font-bold">{t.worker?.name || "N/A"}</span> for <span className="font-bold italic">{t.ticket?.clientName || "Manual Entry"}</span></p>
+                                                            </div>
+                                                        ))}
+                                                        {dailyUsageReport.transactions.length === 0 && <p className="text-sm italic text-muted-foreground">No movements recorded today.</p>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </div>
                     )}
 
@@ -3125,6 +3535,245 @@ const AdminDashboard = () => {
                                     loading={assigning === activeAssignTicket.id}
                                 >
                                     Confirm Team Assignment
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* ── MATERIAL USAGE MODAL ─────────────────────────────────────────── */}
+                {isMaterialModalOpen && selectedTicket && (
+                    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                        <Card className="w-full max-w-2xl shadow-2xl premium-card overflow-hidden">
+                            <CardHeader className="pb-4 bg-emerald-50/50 border-b border-emerald-100">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-xl flex items-center gap-2 text-emerald-700">
+                                            <Box className="h-5 w-5" /> Manage Materials
+                                        </CardTitle>
+                                        <CardDescription className="text-xs">
+                                            Ticket: <span className="font-bold text-foreground">#{selectedTicket.id.slice(0, 8).toUpperCase()}</span> - {selectedTicket.clientName}
+                                        </CardDescription>
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setIsMaterialModalOpen(false)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {/* Add Material Form */}
+                                <form onSubmit={handleAddMaterial} className="p-4 bg-secondary/10 border-b flex gap-3 items-end">
+                                    <div className="flex-1 space-y-1">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Select Item</Label>
+                                        <select 
+                                            className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                                            value={materialForm.productId}
+                                            onChange={(e) => setMaterialForm({...materialForm, productId: e.target.value})}
+                                        >
+                                            <option value="">Choose material...</option>
+                                            {inventoryItems.map(item => (
+                                                <option key={item.id} value={item.id} disabled={item.currentStock <= 0}>
+                                                    {item.name} ({item.currentStock} {item.unitType} available)
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="w-24 space-y-1">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Qty</Label>
+                                        <Input 
+                                            type="number" 
+                                            value={materialForm.quantity} 
+                                            onChange={(e) => setMaterialForm({...materialForm, quantity: e.target.value})}
+                                            min="1"
+                                            className="h-10"
+                                        />
+                                    </div>
+                                    <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 h-10 gap-2">
+                                        <Plus className="h-4 w-4" /> Add
+                                    </Button>
+                                </form>
+
+                                {/* Materials List */}
+                                <div className="max-h-80 overflow-y-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="sticky top-0 bg-white shadow-sm text-[10px] uppercase font-black text-muted-foreground border-b">
+                                            <tr>
+                                                <th className="p-4">Material</th>
+                                                <th className="p-4">Quantity</th>
+                                                <th className="p-4">Added By</th>
+                                                <th className="p-4 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {ticketMaterials.map((tm: any) => (
+                                                <tr key={tm.id} className="hover:bg-secondary/5">
+                                                    <td className="p-4 font-bold text-xs">{tm.product.name}</td>
+                                                    <td className="p-4">
+                                                        <Badge variant="secondary" className="font-bold">{tm.quantity} {tm.product.unitType}</Badge>
+                                                    </td>
+                                                    <td className="p-4 text-[10px] text-muted-foreground">
+                                                        {tm.worker?.name || "Admin"}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveMaterial(tm.id)}>
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {ticketMaterials.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="p-8 text-center text-muted-foreground italic">No materials added to this ticket yet.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </CardContent>
+                            <CardFooter className="p-4 bg-secondary/5 border-t text-[10px] text-muted-foreground italic">
+                                * Adding materials will automatically deduct stock and create transactions.
+                            </CardFooter>
+                        </Card>
+                    </div>
+                )}
+
+                {/* ── ADD NEW ITEM MODAL ───────────────────────────────────────────── */}
+                {isAddItemModalOpen && (
+                    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                        <Card className="w-full max-w-md shadow-2xl premium-card">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-xl flex items-center gap-2">
+                                        <Package className="h-5 w-5 text-accent" /> Register New Item
+                                    </CardTitle>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setIsAddItemModalOpen(false)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <CardDescription>Add a new product to the store master list.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-1.5">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Item Name</Label>
+                                    <Input placeholder="e.g. Cat6 Cable 305m" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Category</Label>
+                                        <select className="w-full h-10 rounded-lg border bg-background px-3 text-sm" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})}>
+                                            <option value="HARDWARE">Hardware</option>
+                                            <option value="CABLES">Cables</option>
+                                            <option value="NETWORKING">Networking</option>
+                                            <option value="ACCESSORIES">Accessories</option>
+                                            <option value="TOOLS">Tools</option>
+                                            <option value="OTHER">Other</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Unit Type</Label>
+                                        <Input placeholder="pcs, mtr, box" value={newItem.unitType} onChange={e => setNewItem({...newItem, unitType: e.target.value})} />
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Min Stock Level (Alert)</Label>
+                                    <Input type="number" value={newItem.minStock} onChange={e => setNewItem({...newItem, minStock: e.target.value})} />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Description</Label>
+                                    <textarea 
+                                        className="w-full min-h-[80px] rounded-lg border bg-background px-3 py-2 text-sm" 
+                                        placeholder="Technical details..." 
+                                        value={newItem.description} 
+                                        onChange={e => setNewItem({...newItem, description: e.target.value})}
+                                    />
+                                </div>
+                                <Button className="w-full h-12 bg-accent hover:shadow-accent/20 shadow-lg font-black uppercase tracking-widest" onClick={async () => {
+                                    if (!newItem.name) return toast.error("Name is required");
+                                    try {
+                                        await apiFetch("/inventory/products", { method: "POST", body: newItem });
+                                        toast.success("Item added successfully!");
+                                        fetchInventoryItems();
+                                        setIsAddItemModalOpen(false);
+                                        setNewItem({ name: "", category: "HARDWARE", description: "", unitType: "pcs", minStock: "5" });
+                                    } catch (e) { toast.error("Failed to add item"); }
+                                }}>
+                                    Register Item
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* ── ADJUST STOCK MODAL ───────────────────────────────────────────── */}
+                {isAdjustStockModalOpen && selectedProduct && (
+                    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                        <Card className="w-full max-w-md shadow-2xl premium-card">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-xl flex items-center gap-2">
+                                        <RefreshCw className="h-5 w-5 text-accent" /> Adjust Stock: {selectedProduct.name}
+                                    </CardTitle>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setIsAdjustStockModalOpen(false)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <CardDescription>Add or remove stock from the current inventory.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex gap-2 p-1 bg-secondary/20 rounded-lg">
+                                    <Button 
+                                        variant={stockAdjustment.type === "IN" ? "default" : "ghost"} 
+                                        className={`flex-1 h-10 ${stockAdjustment.type === "IN" ? 'bg-emerald-600' : ''}`}
+                                        onClick={() => setStockAdjustment({...stockAdjustment, type: "IN", reason: "PURCHASE"})}
+                                    >
+                                        Stock IN
+                                    </Button>
+                                    <Button 
+                                        variant={stockAdjustment.type === "OUT" ? "default" : "ghost"} 
+                                        className={`flex-1 h-10 ${stockAdjustment.type === "OUT" ? 'bg-orange-600' : ''}`}
+                                        onClick={() => setStockAdjustment({...stockAdjustment, type: "OUT", reason: "ISSUE"})}
+                                    >
+                                        Stock OUT
+                                    </Button>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Quantity ({selectedProduct.unitType})</Label>
+                                        <Input type="number" min="1" value={stockAdjustment.quantity} onChange={e => setStockAdjustment({...stockAdjustment, quantity: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Reason</Label>
+                                        <select 
+                                            className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                                            value={stockAdjustment.reason}
+                                            onChange={e => setStockAdjustment({...stockAdjustment, reason: e.target.value})}
+                                        >
+                                            {stockAdjustment.type === "IN" ? (
+                                                <>
+                                                    <option value="PURCHASE">Purchase</option>
+                                                    <option value="RETURN">Return from Site</option>
+                                                    <option value="ADJUSTMENT">Stock Correction (+)</option>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <option value="ISSUE">Issue to Worker</option>
+                                                    <option value="DAMAGED">Damaged / Scrapped</option>
+                                                    <option value="ADJUSTMENT">Stock Correction (-)</option>
+                                                </>
+                                            )}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Notes / Reference</Label>
+                                    <Input placeholder="Supplier name or ticket reference..." value={stockAdjustment.notes} onChange={e => setStockAdjustment({...stockAdjustment, notes: e.target.value})} />
+                                </div>
+                                <Button 
+                                    className={`w-full h-12 font-black uppercase tracking-widest ${stockAdjustment.type === "IN" ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-600 hover:bg-orange-700'}`}
+                                    onClick={handleAdjustStock}
+                                >
+                                    Confirm Adjustment
                                 </Button>
                             </CardContent>
                         </Card>

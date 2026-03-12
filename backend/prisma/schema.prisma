@@ -296,17 +296,9 @@ model ProductMaster {
 
   items        QuotationItem[]
   transactions StockTransaction[]
+  ticketItems  TicketItem[]
 }
 
-model ItemsCatalog {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  price     Float
-  unit      String
-  category  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
 
 enum TransactionType {
   IN
@@ -319,6 +311,8 @@ enum ReferenceType {
   WORKER_ISSUE
   RETURN
   MANUAL_ADJUSTMENT
+  TICKET_USAGE
+  RETURN_FROM_TICKET
 }
 
 model StockTransaction {
@@ -454,6 +448,8 @@ model TicketItem {
   id        String   @id @default(uuid())
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  productId String?
+  product   ProductMaster? @relation(fields: [productId], references: [id])
   itemName  String
   quantity  Int      @default(1)
   price     Float    @default(0)

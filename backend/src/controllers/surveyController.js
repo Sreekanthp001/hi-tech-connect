@@ -21,16 +21,15 @@ exports.submitSurvey = async (req, res) => {
             return res.status(404).json({ error: "Ticket not found" });
         }
 
-        // Fetch prices from catalog
-        const catalogItems = await prisma.itemsCatalog.findMany({
-            where: {
-                name: { in: items.map(i => i.name) }
-            }
+        // Fetch products from master list for selection
+        const catalogItems = await prisma.productMaster.findMany({
+            where: { isActive: true },
+            select: { id: true, name: true, category: true, sellingPrice: true, unitType: true }
         });
 
         const pricingMap = {};
         catalogItems.forEach(item => {
-            pricingMap[item.name] = item.price;
+            pricingMap[item.name] = item.sellingPrice;
         });
 
         // Prepare quotation items

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound, Plus, Trash2 } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound, Plus, Trash2, Box, Package } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import apiFetch from "@/lib/api";
 import { toast } from "sonner";
@@ -29,7 +29,7 @@ interface TicketRecord {
     latitude?: number;
     longitude?: number;
     type: string;
-    status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "NEW_REQUEST" | "SURVEY_ASSIGNED" | "SURVEY_COMPLETED" | "QUOTATION_GENERATED" | "QUOTATION_SENT" | "WAITING_CUSTOMER_APPROVAL" | "APPROVED" | "INSTALLATION_ASSIGNED" | "WORK_ASSIGNED" | "WORK_COMPLETED";
+    status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "SUBMITTED" | "NEW_REQUEST" | "SURVEY_ASSIGNED" | "SURVEY_COMPLETED" | "QUOTATION_GENERATED" | "QUOTATION_SENT" | "WAITING_CUSTOMER_APPROVAL" | "APPROVED" | "INSTALLATION_ASSIGNED" | "WORK_ASSIGNED" | "WORK_COMPLETED" | "NEW" | "SITE_VISIT_ASSIGNED" | "SITE_VISIT_COMPLETED" | "INSTALLATION_APPROVED";
     ticketProgress?: "REQUESTED" | "ASSIGNED" | "ON_THE_WAY" | "IN_PROGRESS" | "COMPLETED" | "TESTING" | "WORKING";
     pendingNote?: string;
     createdAt: string;
@@ -139,6 +139,68 @@ const WorkerDashboard = () => {
         surveyNotes: "",
         additionalItems: ""
     });
+
+    // Material state
+    const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+    const [ticketMaterials, setTicketMaterials] = useState<any[]>([]);
+    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1" });
+    const [inventoryItems, setInventoryItems] = useState<any[]>([]);
+    const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
+
+    const fetchInventoryItems = async () => {
+        try {
+            const res = await apiFetch("/inventory/products");
+            setInventoryItems(res.data);
+        } catch (e) {
+            // Silently fail if items can't be fetched
+        }
+    };
+
+    const fetchTicketMaterials = async (ticketId: string) => {
+        try {
+            const res = await apiFetch(`/inventory/ticket/${ticketId}`);
+            setTicketMaterials(res.data);
+        } catch (e) {
+            toast.error("Failed to fetch ticket materials");
+        }
+    };
+
+    const handleAddMaterial = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedTicket || !materialForm.productId) {
+            toast.error("Please select a product");
+            return;
+        }
+        try {
+            await apiFetch(`/inventory/ticket/add`, {
+                method: "POST",
+                body: {
+                    ticketId: selectedTicket.id,
+                    productId: materialForm.productId,
+                    quantity: Number(materialForm.quantity)
+                }
+            });
+            toast.success("Material added");
+            fetchTicketMaterials(selectedTicket.id);
+            setMaterialForm({ productId: "", quantity: "1" });
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to add material");
+        }
+    };
+
+    const handleRemoveMaterial = async (ticketItemId: string) => {
+        if (!selectedTicket) return;
+        try {
+            await apiFetch(`/inventory/ticket/remove`, {
+                method: "POST",
+                body: { ticketItemId }
+            });
+            toast.success("Material removed");
+            fetchTicketMaterials(selectedTicket.id);
+        } catch (err: any) {
+            toast.error("Failed to remove material");
+        }
+    };
 
     const fetchTickets = async () => {
         setIsLoading(true);
@@ -610,8 +672,23 @@ const WorkerDashboard = () => {
                                                     </>
                                                 )}
 
-                                                {(task.status === "IN_PROGRESS" || task.status === "PENDING") && task.status !== "SURVEY_ASSIGNED" && task.status !== "INSTALLATION_ASSIGNED" && (
-                                                    <div className="flex flex-col sm:flex-row gap-3">
+                                                {(task.status === "IN_PROGRESS" || task.status === "PENDING" || task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED") && (
+                                                    <Button
+                                                        variant="outline"
+                                                        className="flex-1 font-bold border-2 border-emerald-500 text-emerald-600 hover:bg-emerald-50 transition-all h-12 gap-2"
+                                                        onClick={() => {
+                                                            setSelectedTicket(task);
+                                                            setIsMaterialModalOpen(true);
+                                                            fetchTicketMaterials(task.id);
+                                                            fetchInventoryItems();
+                                                        }}
+                                                    >
+                                                        <Box className="h-4 w-4" /> Manage Materials
+                                                    </Button>
+                                                )}
+
+                                                {(task.status === "IN_PROGRESS" || task.status === "PENDING") && (
+                                                    <div className="flex flex-col sm:flex-row gap-3 flex-1">
                                                         {task.status === "PENDING" && (
                                                             <Button
                                                                 variant="outline"
@@ -622,7 +699,7 @@ const WorkerDashboard = () => {
                                                                 Resume Work
                                                             </Button>
                                                         )}
-                                                        {(task.status === "IN_PROGRESS" || task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED") && (
+                                                        {task.status === "IN_PROGRESS" && (
                                                             <Button
                                                                 variant="outline"
                                                                 className="flex-1 font-bold border-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 transition-all h-12"
@@ -1028,6 +1105,95 @@ const WorkerDashboard = () => {
                                     <p className="text-[10px] text-center text-muted-foreground mt-3 italic font-medium">Items with 0 quantity will be excluded from the quotation automatically.</p>
                                 </div>
                             </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ── MATERIAL USAGE MODAL ─────────────────────────────────────────── */}
+            {isMaterialModalOpen && selectedTicket && (
+                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                    <Card className="w-full max-w-2xl shadow-2xl premium-card overflow-hidden">
+                        <CardHeader className="pb-4 bg-emerald-50/50 border-b border-emerald-100">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-xl flex items-center gap-2 text-emerald-700">
+                                        <Box className="h-5 w-5" /> Manage Materials
+                                    </CardTitle>
+                                    <CardDescription className="text-xs">
+                                        Ticket: <span className="font-bold text-foreground">#{selectedTicket.id.slice(0, 8).toUpperCase()}</span> - {selectedTicket.clientName}
+                                    </CardDescription>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setIsMaterialModalOpen(false)}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {/* Add Material Form */}
+                            <form onSubmit={handleAddMaterial} className="p-4 bg-secondary/10 border-b flex gap-3 items-end">
+                                <div className="flex-1 space-y-1">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Select Item</Label>
+                                    <select 
+                                        className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                                        value={materialForm.productId}
+                                        onChange={(e) => setMaterialForm({...materialForm, productId: e.target.value})}
+                                    >
+                                        <option value="">Choose material...</option>
+                                        {inventoryItems.map(item => (
+                                            <option key={item.id} value={item.id} disabled={item.currentStock <= 0}>
+                                                {item.name} ({item.currentStock} {item.unitType} avail.)
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="w-24 space-y-1">
+                                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Qty</Label>
+                                    <Input 
+                                        type="number" 
+                                        value={materialForm.quantity} 
+                                        onChange={(e) => setMaterialForm({...materialForm, quantity: e.target.value})}
+                                        min="1"
+                                        className="h-10"
+                                    />
+                                </div>
+                                <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 h-10 gap-2">
+                                    <Plus className="h-4 w-4" /> Add
+                                </Button>
+                            </form>
+
+                            {/* Materials List */}
+                            <div className="max-h-[40vh] overflow-y-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-white shadow-sm text-[10px] uppercase font-black text-muted-foreground border-b">
+                                        <tr>
+                                            <th className="p-4">Material</th>
+                                            <th className="p-4">Qty</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {ticketMaterials.map((tm: any) => (
+                                            <tr key={tm.id} className="hover:bg-secondary/5">
+                                                <td className="p-4 font-bold text-xs">{tm.product.name}</td>
+                                                <td className="p-4">
+                                                    <Badge variant="secondary" className="font-bold">{tm.quantity} {tm.product.unitType}</Badge>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveMaterial(tm.id)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {ticketMaterials.length === 0 && (
+                                            <tr>
+                                                <td colSpan={3} className="p-8 text-center text-muted-foreground italic text-xs">No materials added yet.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>

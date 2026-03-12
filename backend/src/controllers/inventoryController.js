@@ -53,6 +53,36 @@ exports.getAlerts = async (req, res) => {
     }
 };
 
+// Get Daily Usage Report
+exports.getReport = async (req, res) => {
+    try {
+        const report = await inventoryService.getDailyUsageReport();
+        res.status(200).json(report);
+    } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// Add Material to Ticket
+exports.addTicketMaterial = async (req, res) => {
+    try {
+        const item = await inventoryService.addMaterialToTicket(req.body);
+        res.status(201).json(item);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
+// Remove Material from Ticket
+exports.removeTicketMaterial = async (req, res) => {
+    try {
+        const result = await inventoryService.removeMaterialFromTicket(req.body);
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+};
+
 // List all workers for issue dropdown
 exports.getWorkers = async (req, res) => {
     try {

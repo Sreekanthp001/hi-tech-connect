@@ -57,9 +57,10 @@ class InventoryService {
 
     /**
      * Calculate current stock for a product: SUM(IN) - SUM(OUT)
+     * Optional: Pass transaction client (tx) for use within a transaction
      */
-    async getCurrentStock(productId) {
-        const transactions = await prisma.stockTransaction.findMany({
+    async getCurrentStock(productId, tx = prisma) {
+        const transactions = await tx.stockTransaction.findMany({
             where: { productId },
             select: {
                 quantity: true,
@@ -70,7 +71,7 @@ class InventoryService {
         return transactions.reduce((acc, curr) => {
             if (curr.transactionType === 'IN') return acc + curr.quantity;
             if (curr.transactionType === 'OUT') return acc - curr.quantity;
-            return acc; // For ADJUSTMENT, we might need more complex logic based on sign
+            return acc;
         }, 0);
     }
 
@@ -157,10 +158,135 @@ class InventoryService {
             where: { productId },
             include: {
                 worker: { select: { name: true } },
-                ticket: { select: { title: true } }
+                ticket: { select: { title: true, clientName: true } }
             },
             orderBy: { createdAt: 'desc' }
         });
+    }
+
+    /**
+     * Add material to a ticket (Automatic OUT transaction)
+     */
+    async addMaterialToTicket(data) {
+        const { ticketId, productId, quantity, workerId, notes } = data;
+
+        // 1. Get product details
+        const product = await prisma.productMaster.findUnique({ where: { id: productId } });
+        if (!product) throw new Error("Product not found");
+
+        // 2. Wrap in transaction
+        return await prisma.$transaction(async (tx) => {
+            // 3. Stock check inside transaction
+            const currentStock = await this.getCurrentStock(productId, tx);
+            if (currentStock < quantity) {
+                throw new Error(`Insufficient stock for ${product.name}. Available: ${currentStock}`);
+            }
+
+            // 4. Create TicketItem
+            const ticketItem = await tx.ticketItem.create({
+                data: {
+                    ticketId,
+                    productId,
+                    itemName: product.name,
+                    quantity,
+                    price: 0
+                }
+            });
+
+            // 5. Create StockTransaction (OUT)
+            await tx.stockTransaction.create({
+                data: {
+                    productId,
+                    quantity,
+                    transactionType: 'OUT',
+                    referenceType: 'TICKET_USAGE',
+                    workerId,
+                    ticketId,
+                    notes: notes || `Used in ticket: ${ticketId}`
+                }
+            });
+
+            return ticketItem;
+        });
+    }
+
+    async removeMaterialFromTicket(data) {
+        const { ticketId, ticketItemId, workerId } = data;
+
+        // 1. Get ticket item to know what was used
+        const ticketItem = await prisma.ticketItem.findUnique({
+            where: { id: ticketItemId }
+        });
+        if (!ticketItem) throw new Error("Ticket item not found");
+
+        // 2. Find the product ID correctly
+        const productId = ticketItem.productId;
+        if (!productId) {
+            // Fallback for legacy items without productId
+            const product = await prisma.productMaster.findFirst({
+                where: { name: ticketItem.itemName }
+            });
+            if (!product) throw new Error("Original product not found in master list");
+            ticketItem.productId = product.id;
+        }
+
+        // 3. Start transaction
+        return await prisma.$transaction(async (tx) => {
+            // Delete TicketItem
+            await tx.ticketItem.delete({ where: { id: ticketItemId } });
+
+            // Create StockTransaction (IN/RETURN)
+            await tx.stockTransaction.create({
+                data: {
+                    productId: ticketItem.productId,
+                    quantity: ticketItem.quantity,
+                    transactionType: 'IN',
+                    referenceType: 'RETURN_FROM_TICKET',
+                    workerId,
+                    ticketId,
+                    notes: `Returned from ticket: ${ticketId}`
+                }
+            });
+
+            return { success: true };
+        });
+    }
+
+    /**
+     * Get Daily Usage Report
+     */
+    async getDailyUsageReport() {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const transactions = await prisma.stockTransaction.findMany({
+            where: {
+                transactionType: 'OUT',
+                createdAt: { gte: today }
+            },
+            include: {
+                product: true,
+                worker: { select: { name: true } },
+                ticket: { select: { clientName: true, title: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // Group by product for summarized view
+        const summary = {};
+        transactions.forEach(t => {
+            if (!summary[t.product.name]) {
+                summary[t.product.name] = 0;
+            }
+            summary[t.product.name] += t.quantity;
+        });
+
+        return {
+            date: today,
+            transactions,
+            summarized: Object.entries(summary).map(([name, qty]) => ({ name, quantity: qty })),
+            totalQuantity: transactions.reduce((acc, curr) => acc + curr.quantity, 0)
+        };
     }
 }
 
