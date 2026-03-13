@@ -6,20 +6,20 @@ class InventoryService {
      */
     async addStock(data) {
         const { productId, quantity, referenceType, notes, createdByAdmin = true } = data;
-
-        return await prisma.stockTransaction.create({
+        const transaction = await prisma.stockTransaction.create({
             data: {
-                productId,
-                quantity,
+                productId, quantity,
                 transactionType: 'IN',
                 referenceType: referenceType || 'PURCHASE',
-                notes,
-                createdByAdmin
+                notes, createdByAdmin
             },
-            include: {
-                product: true
-            }
+            include: { product: true }
         });
+        await prisma.productMaster.update({
+            where: { id: productId },
+            data: { currentStock: { increment: quantity } }
+        });
+        return transaction;
     }
 
     /**

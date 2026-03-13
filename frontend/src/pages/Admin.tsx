@@ -1073,6 +1073,7 @@ const AdminDashboard = () => {
             setIsAdjustStockModalOpen(false);
             fetchInventoryItems();
             fetchInventoryStats();
+            fetchInventoryStats();
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to adjust stock");
         }
@@ -2648,13 +2649,13 @@ const AdminDashboard = () => {
                                             <button
                                                 key={subTab}
                                                 className={`pb-4 text-xs font-black uppercase tracking-widest border-b-2 transition-all ${
-                                                    (subTab === "Items List" && !dailyUsageReport && inventoryHistory.length === 0) || 
+                                                    (subTab === "Items List" && !dailyUsageReport && !selectedProduct) || 
                                                     (subTab === "Daily Usage Summary" && dailyUsageReport) ||
-                                                    (subTab === "History" && inventoryHistory.length > 0)
+                                                    (subTab === "History" && selectedProduct && !dailyUsageReport)
                                                     ? "border-accent text-accent" : "border-transparent text-muted-foreground"
                                                 }`}
                                                 onClick={() => {
-                                                    if (subTab === "Items List") { setDailyUsageReport(null); setInventoryHistory([]); }
+                                                    if (subTab === "Items List") { setDailyUsageReport(null); setInventoryHistory([]); setSelectedProduct(null); }
                                                     if (subTab === "Daily Usage Summary") fetchDailyUsageReport();
                                                     if (subTab === "History") { /* History is triggered by item click, but we can clear others */ }
                                                 }}
@@ -2665,7 +2666,7 @@ const AdminDashboard = () => {
                                     </div>
                                 </CardHeader>
                                 <CardContent className="p-0">
-                                    {inventoryHistory.length > 0 ? (
+                                    {selectedProduct && !dailyUsageReport ? (
                                         <div className="p-6">
                                             <div className="mb-6 flex justify-between items-center bg-blue-50 p-4 rounded-xl border border-blue-100">
                                                 <div>
