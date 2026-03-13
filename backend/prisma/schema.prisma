@@ -463,8 +463,10 @@ model TicketMaterial {
     ticketId  String
     productId String
     quantity  Int
+    unitPrice Float    @default(0)
     type      String   @default("USED")
     notes     String?
     createdAt DateTime @default(now())
+    ticket    Ticket        @relation(fields: [ticketId], references: [id])
     product   ProductMaster @relation(fields: [productId], references: [id])
 }

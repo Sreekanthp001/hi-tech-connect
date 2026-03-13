@@ -149,8 +149,8 @@ const WorkerDashboard = () => {
 
     const fetchInventoryItems = async () => {
         try {
-            const res = await apiFetch("/inventory/products");
-            setInventoryItems(res.data);
+            const res = await apiFetch("/inventory/products/list");
+            setInventoryItems(Array.isArray(res.data) ? res.data : (res.data.items || res.data.products || []));
         } catch (e) {
             // Silently fail if items can't be fetched
         }
@@ -158,7 +158,7 @@ const WorkerDashboard = () => {
 
     const fetchTicketMaterials = async (ticketId: string) => {
         try {
-            const res = await apiFetch(`/inventory/ticket/${ticketId}`);
+            const res = await apiFetch(`/inventory/ticket/${ticketId}/materials`);
             setTicketMaterials(res.data);
         } catch (e) {
             toast.error("Failed to fetch ticket materials");
@@ -172,7 +172,7 @@ const WorkerDashboard = () => {
             return;
         }
         try {
-            await apiFetch(`/inventory/ticket/add`, {
+            await apiFetch(`/inventory/ticket/material/add`, {
                 method: "POST",
                 body: {
                     ticketId: selectedTicket.id,
@@ -191,9 +191,8 @@ const WorkerDashboard = () => {
     const handleRemoveMaterial = async (ticketItemId: string) => {
         if (!selectedTicket) return;
         try {
-            await apiFetch(`/inventory/ticket/remove`, {
-                method: "POST",
-                body: { ticketItemId }
+            await apiFetch(`/inventory/ticket/material/${ticketItemId}`, {
+                method: "DELETE"
             });
             toast.success("Material removed");
             fetchTicketMaterials(selectedTicket.id);
@@ -236,12 +235,30 @@ const WorkerDashboard = () => {
         }
     };
 
+    const compressImage = (file: File): Promise<File> => {
+        return new Promise((resolve) => {
+            const canvas = document.createElement('canvas');
+            const img = new Image();
+            img.onload = () => {
+                const maxW = 1024;
+                let w = img.width, h = img.height;
+                if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+                canvas.toBlob(blob => {
+                    resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
+                }, 'image/jpeg', 0.7);
+            };
+            img.src = URL.createObjectURL(file);
+        });
+    };
     const handlePhotoUpload = async (ticketId: string, type: string, file: File) => {
         setUpdating(ticketId);
         try {
+            const compressed = await compressImage(file);
             const formData = new FormData();
             formData.append("type", type);
-            formData.append("file", file);
+            formData.append("file", compressed);
 
             const res = await apiFetch(`/worker/tickets/${ticketId}/upload-photo`, {
                 method: "POST",

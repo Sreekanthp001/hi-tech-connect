@@ -255,13 +255,16 @@ const AdminDashboard = () => {
     const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<any>(null);
     const [dailyUsageReport, setDailyUsageReport] = useState<any>(null);
+    const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0]);
+    const [reportTo, setReportTo] = useState(() => new Date().toISOString().split('T')[0]);
+    const [reportDownloading, setReportDownloading] = useState(false);
     const [stockAdjustment, setStockAdjustment] = useState({ type: "IN", quantity: "", reason: "PURCHASE", notes: "" });
     const [newItem, setNewItem] = useState({ name: "", category: "HARDWARE", description: "", unitType: "pcs", minStock: "5" });
 
     // Ticket Material state
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
     const [ticketMaterials, setTicketMaterials] = useState<any[]>([]);
-    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1" });
+    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1", unitPrice: "0" });
 
     // Active tab
     const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "salary" | "inventory">("tickets");
@@ -1047,6 +1050,26 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleDownloadReport = async (format: 'pdf' | 'excel') => {
+        setReportDownloading(true);
+        try {
+            const res = await apiFetch(`/inventory/report/download?from=${reportFrom}&to=${reportTo}&format=${format}`, { responseType: 'blob' });
+            const blob = new Blob([res.data], { type: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `inventory-report-${reportFrom}-to-${reportTo}.${format === 'pdf' ? 'pdf' : 'xlsx'}`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            toast.success("Report downloaded!");
+        } catch (e) {
+            toast.error("Failed to download report");
+        } finally {
+            setReportDownloading(false);
+        }
+    };
     const fetchDailyUsageReport = async () => {
         try {
             const res = await apiFetch("/inventory/report");
@@ -1081,7 +1104,7 @@ const AdminDashboard = () => {
 
     const fetchTicketMaterials = async (ticketId: string) => {
         try {
-            const res = await apiFetch(`/inventory/ticket/${ticketId}`);
+            const res = await apiFetch(`/inventory/ticket/${ticketId}/materials`);
             setTicketMaterials(res.data);
         } catch (e) {
             toast.error("Failed to fetch ticket materials");
@@ -1095,12 +1118,13 @@ const AdminDashboard = () => {
             return;
         }
         try {
-            await apiFetch(`/inventory/ticket/add`, {
+            await apiFetch(`/inventory/ticket/material/add`, {
                 method: "POST",
                 body: {
                     ticketId: selectedTicket.id,
                     productId: materialForm.productId,
-                    quantity: Number(materialForm.quantity)
+                    quantity: Number(materialForm.quantity),
+                    unitPrice: Number(materialForm.unitPrice) || 0
                 }
             });
             toast.success("Material added to ticket");
@@ -1114,9 +1138,8 @@ const AdminDashboard = () => {
 
     const handleRemoveMaterial = async (ticketItemId: string) => {
         try {
-            await apiFetch(`/inventory/ticket/remove`, {
-                method: "POST",
-                body: { ticketItemId }
+            await apiFetch(`/inventory/ticket/material/${ticketItemId}`, {
+                method: "DELETE"
             });
             toast.success("Material removed");
             fetchTicketMaterials(selectedTicket.id);
@@ -2602,7 +2625,16 @@ const AdminDashboard = () => {
                                     </h2>
                                     <p className="text-muted-foreground">Monitor stock levels, track movements, and manage item master.</p>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2 items-center">
+                                    <input type="date" value={reportFrom} onChange={e => setReportFrom(e.target.value)} className="border rounded px-2 py-1 text-xs h-8" />
+                                    <span className="text-xs text-muted-foreground">to</span>
+                                    <input type="date" value={reportTo} onChange={e => setReportTo(e.target.value)} className="border rounded px-2 py-1 text-xs h-8" />
+                                    <Button variant="outline" size="sm" onClick={() => handleDownloadReport('excel')} disabled={reportDownloading}>
+                                        <Download className="h-4 w-4 mr-1" /> Excel
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={() => handleDownloadReport('pdf')} disabled={reportDownloading}>
+                                        <Download className="h-4 w-4 mr-1" /> PDF
+                                    </Button>
                                     <Button variant="outline" size="sm" onClick={() => { fetchInventoryItems(); fetchInventoryStats(); fetchDailyUsageReport(); }} loading={inventoryLoading}>
                                         <RefreshCw className={`h-4 w-4 mr-2 ${inventoryLoading ? 'animate-spin' : ''}`} />
                                         Refresh Store
@@ -3588,6 +3620,8 @@ const AdminDashboard = () => {
                                             <tr>
                                                 <th className="p-4">Material</th>
                                                 <th className="p-4">Quantity</th>
+                                                <th className="p-4">Unit Price</th>
+                                                <th className="p-4">Total</th>
                                                 <th className="p-4">Added By</th>
                                                 <th className="p-4 text-right">Actions</th>
                                             </tr>
@@ -3599,6 +3633,8 @@ const AdminDashboard = () => {
                                                     <td className="p-4">
                                                         <Badge variant="secondary" className="font-bold">{tm.quantity} {tm.product.unitType}</Badge>
                                                     </td>
+                                                    <td className="p-4 text-xs">₹{tm.unitPrice || 0}</td>
+                                                    <td className="p-4 text-xs font-bold">₹{(tm.quantity * (tm.unitPrice || 0)).toLocaleString()}</td>
                                                     <td className="p-4 text-[10px] text-muted-foreground">
                                                         {tm.worker?.name || "Admin"}
                                                     </td>
@@ -3611,7 +3647,7 @@ const AdminDashboard = () => {
                                             ))}
                                             {ticketMaterials.length === 0 && (
                                                 <tr>
-                                                    <td colSpan={4} className="p-8 text-center text-muted-foreground italic">No materials added to this ticket yet.</td>
+                                                    <td colSpan={6} className="p-8 text-center text-muted-foreground italic">No materials added to this ticket yet.</td>
                                                 </tr>
                                             )}
                                         </tbody>
