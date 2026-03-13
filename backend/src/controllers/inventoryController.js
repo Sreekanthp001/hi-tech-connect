@@ -111,6 +111,8 @@ exports.getTicketMaterials = async (req, res) => {
 
 exports.deleteProduct = async (req, res) => {
     try {
+        await prisma.stockTransaction.deleteMany({ where: { productId: req.params.id } });
+        await prisma.ticketMaterial.deleteMany({ where: { productId: req.params.id } });
         await prisma.productMaster.delete({ where: { id: req.params.id } });
         res.json({ success: true });
     } catch (err) {

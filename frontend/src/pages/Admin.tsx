@@ -3718,7 +3718,7 @@ const AdminDashboard = () => {
                                     <Button 
                                         variant={stockAdjustment.type === "OUT" ? "default" : "ghost"} 
                                         className={`flex-1 h-10 ${stockAdjustment.type === "OUT" ? 'bg-orange-600' : ''}`}
-                                        onClick={() => setStockAdjustment({...stockAdjustment, type: "OUT", reason: "ISSUE"})}
+                                        onClick={() => setStockAdjustment({...stockAdjustment, type: "OUT", reason: "WORKER_ISSUE"})}
                                     >
                                         Stock OUT
                                     </Button>
@@ -3740,13 +3740,13 @@ const AdminDashboard = () => {
                                                 <>
                                                     <option value="PURCHASE">Purchase</option>
                                                     <option value="RETURN">Return from Site</option>
-                                                    <option value="ADJUSTMENT">Stock Correction (+)</option>
+                                                    <option value="MANUAL_ADJUSTMENT">Stock Correction (+)</option>
                                                 </>
                                             ) : (
                                                 <>
                                                     <option value="ISSUE">Issue to Worker</option>
                                                     <option value="DAMAGED">Damaged / Scrapped</option>
-                                                    <option value="ADJUSTMENT">Stock Correction (-)</option>
+                                                    <option value="MANUAL_ADJUSTMENT">Stock Correction (-)</option>
                                                 </>
                                             )}
                                         </select>
