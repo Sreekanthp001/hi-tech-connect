@@ -35,7 +35,7 @@ class InventoryService {
         }
 
         // 2. Create OUT transaction
-        return await prisma.stockTransaction.create({
+        const outTx = await prisma.stockTransaction.create({
             data: {
                 productId,
                 quantity,
@@ -53,6 +53,8 @@ class InventoryService {
                 }
             }
         });
+        await prisma.productMaster.update({ where: { id: productId }, data: { currentStock: { decrement: quantity } } });
+        return outTx;
     }
 
     /**
