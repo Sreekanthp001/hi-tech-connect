@@ -95,3 +95,25 @@ exports.getWorkers = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+exports.getTicketMaterials = async (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        const materials = await prisma.ticketMaterial.findMany({
+            where: { ticketId },
+            include: { product: true }
+        });
+        res.json(materials);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+exports.deleteProduct = async (req, res) => {
+    try {
+        await prisma.productMaster.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};

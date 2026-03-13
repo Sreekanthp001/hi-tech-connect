@@ -291,12 +291,14 @@ model ProductMaster {
   gstPercent        Float    @default(18)
   minimumStockAlert Int      @default(5)
   isActive          Boolean  @default(true)
+  currentStock      Int      @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   items        QuotationItem[]
   transactions StockTransaction[]
   ticketItems  TicketItem[]
+    ticketMaterials TicketMaterial[]
 }
 
 
@@ -454,4 +456,15 @@ model TicketItem {
   quantity  Int      @default(1)
   price     Float    @default(0)
   createdAt DateTime @default(now())
+}
+
+model TicketMaterial {
+    id        String   @id @default(uuid())
+    ticketId  String
+    productId String
+    quantity  Int
+    type      String   @default("USED")
+    notes     String?
+    createdAt DateTime @default(now())
+    product   ProductMaster @relation(fields: [productId], references: [id])
 }

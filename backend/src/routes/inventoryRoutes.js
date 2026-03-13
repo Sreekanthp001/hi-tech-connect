@@ -18,7 +18,9 @@ router.post('/add', requireRole('ADMIN'), inventoryController.addStock);
 router.post('/issue', requireRole('ADMIN'), inventoryController.issueMaterial);
 
 // Routes allowed for both Admin and Worker
+router.get("/ticket/:ticketId", inventoryController.getTicketMaterials);
 router.post('/ticket/add', inventoryController.addTicketMaterial);
 router.post('/ticket/remove', inventoryController.removeTicketMaterial);
+router.delete("/products/:id", requireRole("ADMIN"), inventoryController.deleteProduct);
 
 module.exports = router;

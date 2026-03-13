@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -654,6 +654,7 @@ const AdminDashboard = () => {
         fetchExpenses();
         fetchRevenueBreakdown();
         fetchWorkerFinances();
+        fetchInventoryStats();
     }, []);
 
     // ── Handlers ───────────────────────────────────────────────────────────
@@ -1028,7 +1029,7 @@ const AdminDashboard = () => {
     const fetchInventoryStats = async () => {
         try {
             const res = await apiFetch("/inventory/dashboard");
-            setInventoryStats(res.data);
+            setInventoryStats({ totalItems: res.data.totalProducts || 0, totalStock: res.data.totalStock || 0, todayUsed: res.data.monthlyUsage || 0, lowStockAlerts: res.data.lowStockCount || 0 });
         } catch (e) {
             console.error("Failed to fetch inventory stats");
         }
@@ -1235,28 +1236,22 @@ const AdminDashboard = () => {
                         </Card>
                     ))}
                     {/* Store Module Card */}
-                    <Card 
-                        className="premium-card overflow-hidden group border-accent/20 bg-accent/5 cursor-pointer hover:bg-accent/10 transition-all"
-                        onClick={() => { setActiveTab("inventory"); fetchInventoryItems(); fetchInventoryStats(); }}
-                    >
-                        <CardContent className="flex items-center gap-4 p-6 relative">
-                            <div className="rounded-xl bg-accent text-white p-4 transition-transform group-hover:scale-110 shadow-lg shadow-accent/20">
+                    <Card className="premium-card overflow-hidden cursor-pointer hover:shadow-md transition-all border" onClick={() => { setActiveTab("inventory"); fetchInventoryItems(); fetchInventoryStats(); }}>
+                        <CardContent className="flex items-center gap-4 p-6">
+                            <div className="rounded-xl bg-blue-100 text-blue-600 p-3">
                                 <Package className="h-6 w-6" />
                             </div>
-                            <div>
-                                <p className="text-xs font-black uppercase tracking-widest text-accent">Store / Inventory</p>
-                                <p className="text-2xl font-black tracking-tight text-accent">Manage</p>
+                            <div className="flex-1">
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Store / Inventory</p>
+                                <p className="text-2xl font-black">{inventoryStats.totalItems}</p>
+                                <p className="text-xs text-muted-foreground">Items in stock</p>
                             </div>
-                            <div className="absolute bottom-2 right-4 flex gap-3">
+                            {inventoryStats.lowStockAlerts > 0 && (
                                 <div className="text-right">
-                                    <p className="text-[8px] font-bold uppercase text-muted-foreground">Alerts</p>
                                     <p className="text-xs font-black text-destructive">{inventoryStats.lowStockAlerts}</p>
+                                    <p className="text-[10px] text-destructive">Low Stock</p>
                                 </div>
-                                <div className="text-right border-l pl-3">
-                                    <p className="text-[8px] font-bold uppercase text-muted-foreground">Items</p>
-                                    <p className="text-xs font-black">{inventoryStats.totalItems}</p>
-                                </div>
-                            </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
@@ -1274,6 +1269,7 @@ const AdminDashboard = () => {
                                 if (tab === "analytics") fetchRevStats();
                                 if (tab === "expenses") { fetchExpenses(); fetchRevenueBreakdown(); }
                                 if (tab === "salary") fetchWorkerFinances();
+                                if (tab === "inventory") { fetchInventoryItems(); fetchInventoryStats(); }
                             }}
                             className={`flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition-all duration-200 whitespace-nowrap ${activeTab === tab
                                 ? "bg-primary text-primary-foreground shadow"
