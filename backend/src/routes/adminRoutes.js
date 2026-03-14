@@ -53,5 +53,7 @@ router.patch('/notifications/:id/read', adminController.markNotificationRead);
 router.get('/customers', adminController.getCustomers);
 router.get('/customer/:id', adminController.getCustomerProfile);
 router.get('/customers/:id/statement', adminController.getCustomerStatement);
+router.get('/customer/:phone/assets', adminController.getCustomerAssets);
+router.get('/customer/:phone/assets/pdf', adminController.downloadCustomerInstallationReport);
 
 module.exports = router;

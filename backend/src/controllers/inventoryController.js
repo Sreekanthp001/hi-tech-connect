@@ -485,7 +485,24 @@ exports.getTicketMaterials = async (req, res) => {
             include: { product: { select: { name: true, unitType: true, currentStock: true } } },
             orderBy: { createdAt: 'asc' }
         });
-        res.json(materials);
+
+        const assignments = await prisma.ticketSerialAssignment.findMany({
+            where: { ticketId: req.params.ticketId },
+            include: { serial: true }
+        });
+        
+        const serialsByProduct = assignments.reduce((acc, assignment) => {
+            if (!acc[assignment.productId]) acc[assignment.productId] = [];
+            acc[assignment.productId].push(assignment.serial);
+            return acc;
+        }, {});
+
+        const materialsWithSerials = materials.map(m => ({
+            ...m,
+            assignedSerials: serialsByProduct[m.productId] || []
+        }));
+
+        res.json(materialsWithSerials);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -494,22 +511,52 @@ exports.getTicketMaterials = async (req, res) => {
 // Add material to ticket
 exports.addTicketMaterial = async (req, res) => {
     try {
-        const { ticketId, productId, quantity, unitPrice, notes } = req.body;
+        const { ticketId, productId, quantity, unitPrice, notes, serialIds } = req.body;
         // Check stock
         const product = await prisma.productMaster.findUnique({ where: { id: productId } });
         if (!product) return res.status(404).json({ error: "Product not found" });
         if (product.currentStock < quantity) return res.status(400).json({ error: `Insufficient stock. Available: ${product.currentStock} ${product.unitType}` });
-        // Add material record
-        const material = await prisma.ticketMaterial.create({
-            data: { ticketId, productId, quantity, notes },
-            include: { product: { select: { name: true, unitType: true } } }
+        
+        const result = await prisma.$transaction(async (tx) => {
+            if (serialIds && serialIds.length > 0) {
+                if (serialIds.length !== quantity) {
+                    throw new Error("Quantity must match the number of selected serial numbers.");
+                }
+
+                const serials = await tx.productSerial.findMany({ where: { id: { in: serialIds } } });
+                if (serials.length !== quantity || serials.some(s => s.status !== 'IN_STOCK')) {
+                    throw new Error("Invalid or already issued serial numbers selected.");
+                }
+
+                await tx.productSerial.updateMany({
+                    where: { id: { in: serialIds } },
+                    data: { status: 'ISSUED_TO_WORKER' }
+                });
+
+                const assignments = serialIds.map(sid => ({
+                    ticketId,
+                    productId,
+                    serialId: sid,
+                    workerId: req.user?.id || null, 
+                }));
+
+                await tx.ticketSerialAssignment.createMany({
+                    data: assignments
+                });
+            }
+
+            const material = await tx.ticketMaterial.create({
+                data: { ticketId, productId, quantity, unitPrice, notes, workerId: req.user?.role === 'WORKER' ? req.user.id : null },
+                include: { product: { select: { name: true, unitType: true } } }
+            });
+            await tx.productMaster.update({ where: { id: productId }, data: { currentStock: { decrement: quantity } } });
+            await tx.stockTransaction.create({
+                data: { productId, quantity, transactionType: 'OUT', referenceType: 'WORKER_ISSUE', ticketId, notes: `Ticket material`, createdByAdmin: req.user?.role === 'ADMIN' }
+            });
+            return material;
         });
-        // Deduct stock
-        await prisma.productMaster.update({ where: { id: productId }, data: { currentStock: { decrement: quantity } } });
-        await prisma.stockTransaction.create({
-            data: { productId, quantity, transactionType: 'OUT', referenceType: 'WORKER_ISSUE', ticketId, notes: `Ticket material`, createdByAdmin: true }
-        });
-        res.json(material);
+
+        res.json(result);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -519,11 +566,35 @@ exports.addTicketMaterial = async (req, res) => {
 exports.removeTicketMaterial = async (req, res) => {
     try {
         const material = await prisma.ticketMaterial.findUnique({ where: { id: req.params.id } });
-        if (!material) return res.status(404).json({ error: "Not found" });
-        // Restore stock
-        await prisma.productMaster.update({ where: { id: material.productId }, data: { currentStock: { increment: material.quantity } } });
-        await prisma.ticketMaterial.delete({ where: { id: req.params.id } });
-        res.json({ success: true });
+        if (!material) return res.status(404).json({ error: "Material not found" });
+
+        await prisma.$transaction(async (tx) => {
+            // Unassign serials
+            const assignments = await tx.ticketSerialAssignment.findMany({
+                where: { ticketId: material.ticketId, productId: material.productId }
+            });
+
+            if (assignments.length > 0) {
+                const serialIds = assignments.map(a => a.serialId);
+                await tx.productSerial.updateMany({
+                    where: { id: { in: serialIds }, status: 'ISSUED_TO_WORKER' },
+                    data: { status: 'IN_STOCK' }
+                });
+                await tx.ticketSerialAssignment.deleteMany({
+                    where: { ticketId: material.ticketId, productId: material.productId }
+                });
+            }
+
+            // Remove material
+            await tx.ticketMaterial.delete({ where: { id: req.params.id } });
+            // Restore stock
+            await tx.productMaster.update({ where: { id: material.productId }, data: { currentStock: { increment: material.quantity } } });
+            await tx.stockTransaction.create({
+                data: { productId: material.productId, quantity: material.quantity, transactionType: 'IN', referenceType: 'MANUAL_ADJUSTMENT', ticketId: material.ticketId, notes: `Reverted material added to ticket`, createdByAdmin: req.user?.role === 'ADMIN' }
+            });
+        });
+
+        res.json({ message: "Material removed successfully" });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -537,6 +608,168 @@ exports.getProducts = async (req, res) => {
             orderBy: { name: 'asc' }
         });
         res.json(products);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// =============================================
+// Device Serial Tracking
+// =============================================
+
+// Get serials for a product
+exports.getProductSerials = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const serials = await prisma.productSerial.findMany({
+            where: { productId },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                ticketAssignments: {
+                    include: { ticket: { select: { id: true, title: true } }, worker: { select: { name: true } } }
+                },
+                customerAssets: {
+                    include: { ticket: { select: { id: true, clientName: true } } }
+                }
+            }
+        });
+        res.json(serials);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Add new serials
+exports.addProductSerials = async (req, res) => {
+    try {
+        const { productId } = req.params;
+        const { serialNumbers } = req.body; // Array of formatted strings
+
+        if (!Array.isArray(serialNumbers) || serialNumbers.length === 0) {
+            return res.status(400).json({ error: "No serial numbers provided" });
+        }
+
+        // Check if any of these serials already exist across any product
+        const existingSerials = await prisma.productSerial.findMany({
+            where: { serialNumber: { in: serialNumbers } }
+        });
+
+        if (existingSerials.length > 0) {
+            const duplicates = existingSerials.map(s => s.serialNumber).join(', ');
+            return res.status(400).json({ error: `Following serial numbers already exist: ${duplicates}` });
+        }
+
+        // Create serials
+        const newSerials = await prisma.$transaction(
+            serialNumbers.map(serial => prisma.productSerial.create({
+                data: {
+                    productId,
+                    serialNumber: serial,
+                    status: 'IN_STOCK' // default
+                }
+            }))
+        );
+
+        res.status(201).json({ message: "Serials added successfully", count: newSerials.length });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Delete a serial number
+exports.deleteProductSerial = async (req, res) => {
+    try {
+        const { serialId } = req.params;
+        
+        // Prevent deleting if it's not IN_STOCK depending on rules, 
+        // e.g. can't delete if INSTALLED or ISSUED
+        const serial = await prisma.productSerial.findUnique({
+            where: { id: serialId },
+            include: { ticketAssignments: true, customerAssets: true }
+        });
+
+        if (!serial) {
+            return res.status(404).json({ error: "Serial not found" });
+        }
+
+        if (serial.ticketAssignments.length > 0 || serial.customerAssets.length > 0) {
+             return res.status(400).json({ error: "Cannot delete a serial number that has been issued or installed." });
+        }
+
+        await prisma.productSerial.delete({
+            where: { id: serialId }
+        });
+
+        res.json({ success: true, message: "Serial deleted successfully" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Return assigned serials to stock
+exports.returnSerials = async (req, res) => {
+    try {
+        const { ticketId, serialIds, notes } = req.body;
+        const workerId = req.user?.id || req.user?.userId;
+        const result = await inventoryService.returnSerialMaterials({ ticketId, serialIds, workerId, notes });
+        res.json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
+
+// Daily Serial Tracking Report
+exports.getSerialTrackingReport = async (req, res) => {
+    try {
+        const { date } = req.query;
+        let queryDate = date ? new Date(date) : new Date();
+        const startOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate());
+        const endOfDay = new Date(queryDate.getFullYear(), queryDate.getMonth(), queryDate.getDate(), 23, 59, 59);
+
+        // Fetch assignments issued today
+        const issued = await prisma.ticketSerialAssignment.findMany({
+            where: { issuedAt: { gte: startOfDay, lte: endOfDay } },
+            include: {
+                product: { select: { name: true } },
+                serial: { select: { serialNumber: true } },
+                worker: { select: { name: true } },
+                ticket: { select: { id: true, title: true } }
+            }
+        });
+
+        // Fetch assignments installed today
+        const installed = await prisma.ticketSerialAssignment.findMany({
+            where: { installedAt: { gte: startOfDay, lte: endOfDay } },
+            include: {
+                product: { select: { name: true } },
+                serial: { select: { serialNumber: true } },
+                worker: { select: { name: true } },
+                ticket: { select: { id: true, title: true } }
+            }
+        });
+
+        // Fetch assignments returned today
+        const returned = await prisma.ticketSerialAssignment.findMany({
+            where: { returnedAt: { gte: startOfDay, lte: endOfDay } },
+            include: {
+                product: { select: { name: true } },
+                serial: { select: { serialNumber: true } },
+                worker: { select: { name: true } },
+                ticket: { select: { id: true, title: true } }
+            }
+        });
+
+        res.status(200).json({
+            date: queryDate,
+            issued,
+            installed,
+            returned,
+            summary: {
+                issuedCount: issued.length,
+                installedCount: installed.length,
+                returnedCount: returned.length
+            }
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

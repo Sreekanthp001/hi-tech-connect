@@ -46,6 +46,20 @@ enum TicketProgress {
   COMPLETED
 }
 
+enum SerialStatus {
+  IN_STOCK
+  ISSUED_TO_WORKER
+  INSTALLED
+  RETURNED_TO_STORE
+  REPLACED
+}
+
+enum AssetStatus {
+  ACTIVE
+  REPLACED
+  REMOVED
+}
+
 model User {
   id         String   @id @default(uuid())
   name       String
@@ -64,6 +78,7 @@ model User {
   notifications     Notification[]
   ticketPhotos      TicketPhoto[]
   stockTransactions StockTransaction[]
+  ticketSerialAssignments TicketSerialAssignment[]
 
   // Lead and Installation Relations
   assignedLeads        Lead[]                   @relation("LeadTechnician")
@@ -151,6 +166,9 @@ model Ticket {
   internalNotifications InternalNotification[]
   stockTransactions     StockTransaction[]
   items                 TicketItem[]
+  ticketMaterials       TicketMaterial[]
+  serialAssignments     TicketSerialAssignment[]
+  customerAssets        CustomerAsset[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 }
@@ -295,10 +313,13 @@ model ProductMaster {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  items        QuotationItem[]
-  transactions StockTransaction[]
-  ticketItems  TicketItem[]
-    ticketMaterials TicketMaterial[]
+  items                 QuotationItem[]
+  transactions          StockTransaction[]
+  ticketItems           TicketItem[]
+  ticketMaterials       TicketMaterial[]
+  serials               ProductSerial[]
+  serialAssignments     TicketSerialAssignment[]
+  customerAssets        CustomerAsset[]
 }
 
 
@@ -469,4 +490,47 @@ model TicketMaterial {
     createdAt DateTime @default(now())
     ticket    Ticket        @relation(fields: [ticketId], references: [id])
     product   ProductMaster @relation(fields: [productId], references: [id])
+}
+
+model ProductSerial {
+  id           String       @id @default(uuid())
+  productId    String
+  product      ProductMaster @relation(fields: [productId], references: [id])
+  serialNumber String       @unique
+  status       SerialStatus @default(IN_STOCK)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  ticketAssignments TicketSerialAssignment[]
+  customerAssets    CustomerAsset[]
+}
+
+model TicketSerialAssignment {
+  id          String        @id @default(uuid())
+  ticketId    String
+  ticket      Ticket        @relation(fields: [ticketId], references: [id])
+  productId   String
+  product     ProductMaster @relation(fields: [productId], references: [id])
+  serialId    String
+  serial      ProductSerial @relation(fields: [serialId], references: [id])
+  workerId    String
+  worker      User          @relation(fields: [workerId], references: [id])
+  
+  issuedAt    DateTime      @default(now())
+  installedAt DateTime?
+  returnedAt  DateTime?
+}
+
+model CustomerAsset {
+  id               String        @id @default(uuid())
+  customerPhone    String
+  productId        String
+  product          ProductMaster @relation(fields: [productId], references: [id])
+  serialId         String
+  serial           ProductSerial @relation(fields: [serialId], references: [id])
+  ticketId         String
+  ticket           Ticket        @relation(fields: [ticketId], references: [id])
+  
+  installationDate DateTime      @default(now())
+  status           AssetStatus   @default(ACTIVE)
 }

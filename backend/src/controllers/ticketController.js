@@ -329,6 +329,12 @@ exports.updateStatus = async (req, res) => {
                 console.error("[Salary Error] distributeWorkerSalary:", err.message);
             });
 
+            // Map installed serial numbers to customer assets
+            const inventoryService = require('../services/inventoryService');
+            inventoryService.installSerialMaterials(ticketId, updatedTicket.clientPhone).catch(err => {
+                console.error("[Asset Install Error]:", err.message);
+            });
+
             // Customer Notification - Job Completed
             if (updatedTicket.telegramId) {
                 const baseUrl = process.env.BASE_URL || 'https://hitech-connect.in';
@@ -482,6 +488,12 @@ exports.adminUpdateStatus = async (req, res) => {
             // Distribute salary among assigned workers
             distributeWorkerSalary(ticketId, updatedTicket.totalAmount).catch(err => {
                 console.error("[Salary Error] distributeWorkerSalary:", err.message);
+            });
+
+            // Map installed serial numbers to customer assets
+            const inventoryService = require('../services/inventoryService');
+            inventoryService.installSerialMaterials(ticketId, updatedTicket.clientPhone).catch(err => {
+                console.error("[Asset Install Error]:", err.message);
             });
         }
 

@@ -17,7 +17,16 @@ router.post('/issue', requireRole('ADMIN'), inventoryController.issueMaterial);
 router.get('/ticket/:ticketId/materials', authMiddleware, inventoryController.getTicketMaterials);
 router.post('/ticket/material/add', inventoryController.addTicketMaterial);
 router.delete('/ticket/material/:id', inventoryController.removeTicketMaterial);
+router.post('/ticket/serials/return', authMiddleware, inventoryController.returnSerials);
 router.delete('/products/:id', requireRole('ADMIN'), inventoryController.deleteProduct);
 
 router.get("/products/list", inventoryController.getProducts);
+
+// Device Serial Tracking Routes
+router.get('/products/:productId/serials', requireRole('ADMIN'), inventoryController.getProductSerials);
+router.post('/products/:productId/serials', requireRole('ADMIN'), inventoryController.addProductSerials);
+router.delete('/serials/:serialId', requireRole('ADMIN'), inventoryController.deleteProductSerial);
+
+router.get('/serial-report', requireRole('ADMIN'), inventoryController.getSerialTrackingReport);
+
 module.exports = router;

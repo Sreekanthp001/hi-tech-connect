@@ -252,7 +252,13 @@ const AdminDashboard = () => {
     const [inventoryHistory, setInventoryHistory] = useState<any[]>([]);
     const [inventoryLoading, setInventoryLoading] = useState(false);
     const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
+    const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
     const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
+    const [isManageSerialsModalOpen, setIsManageSerialsModalOpen] = useState(false);
+    const [selectedSerialProduct, setSelectedSerialProduct] = useState<any>(null);
+    const [productSerials, setProductSerials] = useState<any[]>([]);
+    const [newSerialLines, setNewSerialLines] = useState("");
+    const [serialsLoading, setSerialsLoading] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<any>(null);
     const [dailyUsageReport, setDailyUsageReport] = useState<any>(null);
     const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0]);
@@ -264,7 +270,8 @@ const AdminDashboard = () => {
     // Ticket Material state
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
     const [ticketMaterials, setTicketMaterials] = useState<any[]>([]);
-    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1", unitPrice: "0" });
+    const [materialForm, setMaterialForm] = useState<{productId: string, quantity: string, unitPrice: string, serialIds: string[]}>({ productId: "", quantity: "1", unitPrice: "0", serialIds: [] });
+    const [availableSerials, setAvailableSerials] = useState<any[]>([]);
 
     // Active tab
     const [activeTab, setActiveTab] = useState<"tickets" | "analytics" | "expenses" | "customers" | "performance" | "workers" | "salary" | "inventory">("tickets");
@@ -659,6 +666,25 @@ const AdminDashboard = () => {
         fetchWorkerFinances();
         fetchInventoryStats();
     }, []);
+
+    // Load available serials when a product is selected for assigning
+    useEffect(() => {
+        const fetchAvailableSerials = async () => {
+            if (materialForm.productId) {
+                try {
+                    const res = await apiFetch(`/inventory/products/${materialForm.productId}/serials`);
+                    setAvailableSerials(res.data.filter((s:any) => s.status === 'IN_STOCK'));
+                    setMaterialForm(prev => ({ ...prev, serialIds: [] }));
+                } catch (e) {
+                    setAvailableSerials([]);
+                }
+            } else {
+                setAvailableSerials([]);
+                setMaterialForm(prev => ({ ...prev, serialIds: [] }));
+            }
+        };
+        fetchAvailableSerials();
+    }, [materialForm.productId]);
 
     // ── Handlers ───────────────────────────────────────────────────────────
 
@@ -1102,6 +1128,53 @@ const AdminDashboard = () => {
         }
     };
 
+    // --- Asset Management (Serials) Methods ---
+    const handleManageSerials = (product: any) => {
+        setSelectedSerialProduct(product);
+        setIsManageSerialsModalOpen(true);
+        fetchProductSerials(product.id);
+    };
+
+    const fetchProductSerials = async (productId: string) => {
+        try {
+            setSerialsLoading(true);
+            const res = await apiFetch(`/inventory/products/${productId}/serials`);
+            setProductSerials(res.data);
+        } catch (err) {
+            toast.error("Failed to fetch serial numbers");
+        } finally {
+            setSerialsLoading(false);
+        }
+    };
+
+    const handleAddSerials = async () => {
+        if (!newSerialLines.trim()) return;
+        const serialsArray = newSerialLines.split('\n').map(s => s.trim()).filter(s => s);
+        if (serialsArray.length === 0) return;
+
+        try {
+            await apiFetch(`/inventory/products/${selectedSerialProduct.id}/serials`, {
+                method: "POST",
+                body: JSON.stringify({ serialNumbers: serialsArray })
+            });
+            toast.success(`Added ${serialsArray.length} serials`);
+            setNewSerialLines("");
+            fetchProductSerials(selectedSerialProduct.id);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to add serials");
+        }
+    };
+
+    const handleDeleteSerial = async (serialId: string) => {
+        try {
+            await apiFetch(`/inventory/serials/${serialId}`, { method: "DELETE" });
+            toast.success("Serial deleted");
+            fetchProductSerials(selectedSerialProduct.id);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Cannot delete this serial");
+        }
+    };
+
     const fetchTicketMaterials = async (ticketId: string) => {
         try {
             const res = await apiFetch(`/inventory/ticket/${ticketId}/materials`);
@@ -1117,19 +1190,26 @@ const AdminDashboard = () => {
             toast.error("Please select a product");
             return;
         }
+
+        if (availableSerials.length > 0 && materialForm.serialIds.length !== Number(materialForm.quantity)) {
+            toast.error(`Please select exactly ${materialForm.quantity} serial number(s)`);
+            return;
+        }
+
         try {
             await apiFetch(`/inventory/ticket/material/add`, {
                 method: "POST",
-                body: {
+                body: JSON.stringify({
                     ticketId: selectedTicket.id,
                     productId: materialForm.productId,
                     quantity: Number(materialForm.quantity),
-                    unitPrice: Number(materialForm.unitPrice) || 0
-                }
+                    unitPrice: Number(materialForm.unitPrice) || 0,
+                    serialIds: materialForm.serialIds
+                })
             });
             toast.success("Material added to ticket");
             fetchTicketMaterials(selectedTicket.id);
-            setMaterialForm({ productId: "", quantity: "1" });
+            setMaterialForm({ productId: "", quantity: "1", unitPrice: "0", serialIds: [] });
             fetchInventoryStats(); // Update stock counts
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to add material");
@@ -2743,7 +2823,7 @@ const AdminDashboard = () => {
                                             <table className="w-full text-left text-sm">
                                                 <thead className="border-b text-muted-foreground bg-secondary/10">
                                                     <tr>
-                                                        {["Item Name", "Category", "In Stock", "Description", "Actions"].map((h) => (
+                                                        {["Item Name", "Category", "In Stock", "Serials", "Actions"].map((h) => (
                                                             <th key={h} className="p-4 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
                                                         ))}
                                                     </tr>
@@ -2760,7 +2840,16 @@ const AdminDashboard = () => {
                                                                     {item.currentStock ?? 0} {item.unitType || 'pcs'}
                                                                 </span>
                                                             </td>
-                                                            <td className="p-4 text-[10px] text-muted-foreground">{item.description || "—"}</td>
+                                                            <td className="p-4">
+                                                                <Button 
+                                                                    variant="outline" 
+                                                                    size="sm" 
+                                                                    className="h-8 text-[10px] font-black uppercase"
+                                                                    onClick={() => handleManageSerials(item)}
+                                                                >
+                                                                    Manage Serials
+                                                                </Button>
+                                                            </td>
                                                             <td className="p-4">
                                                                 <div className="flex gap-2">
                                                                     <Button 
@@ -3582,35 +3671,70 @@ const AdminDashboard = () => {
                             </CardHeader>
                             <CardContent className="p-0">
                                 {/* Add Material Form */}
-                                <form onSubmit={handleAddMaterial} className="p-4 bg-secondary/10 border-b flex gap-3 items-end">
-                                    <div className="flex-1 space-y-1">
-                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Select Item</Label>
-                                        <select 
-                                            className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
-                                            value={materialForm.productId}
-                                            onChange={(e) => setMaterialForm({...materialForm, productId: e.target.value})}
-                                        >
-                                            <option value="">Choose material...</option>
-                                            {inventoryItems.map(item => (
-                                                <option key={item.id} value={item.id} disabled={item.currentStock <= 0}>
-                                                    {item.name} ({item.currentStock} {item.unitType} available)
-                                                </option>
-                                            ))}
-                                        </select>
+                                <form onSubmit={handleAddMaterial} className="p-4 bg-secondary/10 border-b flex flex-col gap-3">
+                                    <div className="flex gap-3 items-end">
+                                        <div className="flex-1 space-y-1">
+                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Select Item</Label>
+                                            <select 
+                                                className="w-full h-10 rounded-lg border bg-background px-3 text-sm"
+                                                value={materialForm.productId}
+                                                onChange={(e) => setMaterialForm({...materialForm, productId: e.target.value})}
+                                            >
+                                                <option value="">Choose material...</option>
+                                                {inventoryItems.map(item => (
+                                                    <option key={item.id} value={item.id} disabled={item.currentStock <= 0}>
+                                                        {item.name} ({item.currentStock} {item.unitType} available)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="w-24 space-y-1">
+                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Qty</Label>
+                                            <Input 
+                                                type="number" 
+                                                value={materialForm.quantity} 
+                                                onChange={(e) => {
+                                                    const newQty = e.target.value;
+                                                    setMaterialForm(prev => {
+                                                        const newIds = prev.serialIds.slice(0, Number(newQty));
+                                                        return {...prev, quantity: newQty, serialIds: newIds};
+                                                    });
+                                                }}
+                                                min="1"
+                                                className="h-10"
+                                            />
+                                        </div>
+                                        <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 h-10 gap-2">
+                                            <Plus className="h-4 w-4" /> Add
+                                        </Button>
                                     </div>
-                                    <div className="w-24 space-y-1">
-                                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Qty</Label>
-                                        <Input 
-                                            type="number" 
-                                            value={materialForm.quantity} 
-                                            onChange={(e) => setMaterialForm({...materialForm, quantity: e.target.value})}
-                                            min="1"
-                                            className="h-10"
-                                        />
-                                    </div>
-                                    <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 h-10 gap-2">
-                                        <Plus className="h-4 w-4" /> Add
-                                    </Button>
+                                    {availableSerials.length > 0 && (
+                                        <div className="w-full mt-2 bg-white p-3 rounded-xl border border-secondary">
+                                            <Label className="text-[10px] font-black uppercase text-accent">Select Serials ({materialForm.serialIds.length} / {materialForm.quantity})</Label>
+                                            <div className="flex flex-wrap gap-2 mt-2 max-h-[120px] overflow-y-auto">
+                                                {availableSerials.map(serial => (
+                                                    <Badge 
+                                                        key={serial.id} 
+                                                        variant={materialForm.serialIds.includes(serial.id) ? "default" : "outline"}
+                                                        className={`cursor-pointer text-xs font-mono transition-colors ${materialForm.serialIds.includes(serial.id) ? 'bg-accent/20 text-accent border-accent/30' : 'hover:bg-secondary/20'}`}
+                                                        onClick={() => {
+                                                            const selected = [...materialForm.serialIds];
+                                                            if (selected.includes(serial.id)) {
+                                                                setMaterialForm({...materialForm, serialIds: selected.filter(id => id !== serial.id)});
+                                                            } else if (selected.length < Number(materialForm.quantity)) {
+                                                                setMaterialForm({...materialForm, serialIds: [...selected, serial.id]});
+                                                            } else {
+                                                                toast.error(`You can only select ${materialForm.quantity} serial(s)`);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {serial.serialNumber}
+                                                        {materialForm.serialIds.includes(serial.id) && <X className="ml-1 h-3 w-3 inline" />}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </form>
 
                                 {/* Materials List */}
@@ -3799,6 +3923,89 @@ const AdminDashboard = () => {
                                 >
                                     Confirm Adjustment
                                 </Button>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* ── MANAGE SERIALS MODAL ─────────────────────────────────────────── */}
+                {isManageSerialsModalOpen && selectedSerialProduct && (
+                    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                        <Card className="w-full max-w-2xl shadow-2xl premium-card flex flex-col max-h-[90vh]">
+                            <CardHeader className="shrink-0">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-xl flex items-center gap-2">
+                                        <Package className="h-5 w-5 text-accent" /> Manage Serials: {selectedSerialProduct.name}
+                                    </CardTitle>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => { setIsManageSerialsModalOpen(false); setSelectedSerialProduct(null); }}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <CardDescription>Track individual physical units using serial numbers.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="overflow-y-auto space-y-6">
+                                <div className="p-4 bg-secondary/10 rounded-xl space-y-3">
+                                    <Label className="text-xs font-black uppercase text-accent tracking-widest">Add New Serials</Label>
+                                    <p className="text-xs text-muted-foreground">Enter one serial number per line.</p>
+                                    <textarea 
+                                        className="w-full min-h-[100px] rounded-lg border bg-background px-3 py-2 text-sm" 
+                                        placeholder="SN-10001\nSN-10002"
+                                        value={newSerialLines}
+                                        onChange={e => setNewSerialLines(e.target.value)}
+                                    />
+                                    <Button size="sm" className="w-full bg-accent hover:bg-accent/90" onClick={handleAddSerials}>
+                                        <Plus className="h-4 w-4 mr-2" /> Add {newSerialLines.split('\n').filter(s=>s.trim()).length} Serial(s)
+                                    </Button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-black uppercase text-muted-foreground tracking-widest">Registered Serials ({productSerials.length})</Label>
+                                        <Button variant="ghost" size="sm" onClick={() => fetchProductSerials(selectedSerialProduct.id)} disabled={serialsLoading}>
+                                            <RefreshCw className={`h-4 w-4 ${serialsLoading ? 'animate-spin' : ''}`} />
+                                        </Button>
+                                    </div>
+                                    <div className="border rounded-xl overflow-hidden max-h-[300px] overflow-y-auto">
+                                        <table className="w-full text-left text-sm">
+                                            <thead className="bg-secondary/20 sticky top-0">
+                                                <tr>
+                                                    <th className="p-3 text-xs font-semibold">Serial No</th>
+                                                    <th className="p-3 text-xs font-semibold">Status</th>
+                                                    <th className="p-3 text-xs justify-end flex">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {productSerials.map(serial => (
+                                                    <tr key={serial.id} className="hover:bg-secondary/5">
+                                                        <td className="p-3 font-mono text-xs">{serial.serialNumber}</td>
+                                                        <td className="p-3">
+                                                            <Badge variant="outline" className={`text-[10px] uppercase font-black ${
+                                                                serial.status === 'IN_STOCK' ? 'text-emerald-600 border-emerald-200 bg-emerald-50' :
+                                                                serial.status === 'ISSUED_TO_WORKER' ? 'text-blue-600 border-blue-200 bg-blue-50' :
+                                                                serial.status === 'INSTALLED' ? 'text-purple-600 border-purple-200 bg-purple-50' :
+                                                                'text-slate-600 border-slate-200 bg-slate-50'
+                                                            }`}>
+                                                                {serial.status.replace(/_/g, ' ')}
+                                                            </Badge>
+                                                        </td>
+                                                        <td className="p-3 flex justify-end">
+                                                            {(serial.status === 'IN_STOCK' || serial.status === 'RETURNED_TO_STORE') && (
+                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteSerial(serial.id)}>
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {productSerials.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={3} className="p-6 text-center text-muted-foreground italic">No serials tracked for this item yet.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
                     </div>

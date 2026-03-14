@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound, Plus, Trash2, Box, Package } from "lucide-react";
+import { MapPin, Clock, CheckCircle2, AlertTriangle, Calendar, PhoneCall, RefreshCw, Navigation, X, Camera, Play, Zap, KeyRound, Plus, Trash2, Box, Package, RotateCcw, History, ChevronDown, ChevronUp } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import apiFetch from "@/lib/api";
 import { toast } from "sonner";
@@ -143,9 +143,20 @@ const WorkerDashboard = () => {
     // Material state
     const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
     const [ticketMaterials, setTicketMaterials] = useState<any[]>([]);
-    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1" });
+    const [materialForm, setMaterialForm] = useState({ productId: "", quantity: "1", serialIds: [] as string[] });
     const [inventoryItems, setInventoryItems] = useState<any[]>([]);
     const [selectedTicket, setSelectedTicket] = useState<TicketRecord | null>(null);
+
+    // Return Serials Modal State
+    const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+    const [returnSerialIds, setReturnSerialIds] = useState<string[]>([]);
+    const [isReturning, setIsReturning] = useState(false);
+
+    // Installed Assets Modal State
+    const [isAssetsModalOpen, setIsAssetsModalOpen] = useState(false);
+    const [installedAssets, setInstalledAssets] = useState<any[]>([]);
+    const [assetsLoading, setAssetsLoading] = useState(false);
+    const [assetsTicket, setAssetsTicket] = useState<TicketRecord | null>(null);
 
     const fetchInventoryItems = async () => {
         try {
@@ -182,7 +193,7 @@ const WorkerDashboard = () => {
             });
             toast.success("Material added");
             fetchTicketMaterials(selectedTicket.id);
-            setMaterialForm({ productId: "", quantity: "1" });
+            setMaterialForm({ productId: "", quantity: "1", serialIds: [] });
         } catch (err: any) {
             toast.error(err.response?.data?.error || "Failed to add material");
         }
@@ -198,6 +209,39 @@ const WorkerDashboard = () => {
             fetchTicketMaterials(selectedTicket.id);
         } catch (err: any) {
             toast.error("Failed to remove material");
+        }
+    };
+
+    const handleReturnSerials = async () => {
+        if (!selectedTicket || returnSerialIds.length === 0) return;
+        setIsReturning(true);
+        try {
+            await apiFetch("/inventory/ticket/serials/return", {
+                method: "POST",
+                body: { ticketId: selectedTicket.id, serialIds: returnSerialIds, notes: "Worker returned unused items" }
+            });
+            toast.success(`${returnSerialIds.length} serial(s) returned to stock`);
+            setReturnSerialIds([]);
+            setIsReturnModalOpen(false);
+            fetchTicketMaterials(selectedTicket.id);
+        } catch (err: any) {
+            toast.error(err.response?.data?.error || "Failed to return serials");
+        } finally {
+            setIsReturning(false);
+        }
+    };
+
+    const fetchInstalledAssets = async (ticket: TicketRecord) => {
+        setAssetsTicket(ticket);
+        setIsAssetsModalOpen(true);
+        setAssetsLoading(true);
+        try {
+            const res = await apiFetch(`/admin/customer/${ticket.clientPhone}/assets`);
+            setInstalledAssets(res.data || []);
+        } catch {
+            toast.error("Failed to fetch previously installed equipment");
+        } finally {
+            setAssetsLoading(false);
         }
     };
 
@@ -705,6 +749,16 @@ const WorkerDashboard = () => {
                                                 )}
 
                                                 {(task.status === "IN_PROGRESS" || task.status === "PENDING") && (
+                                                    <Button
+                                                        variant="outline"
+                                                        className="font-bold border-2 border-indigo-400 text-indigo-600 hover:bg-indigo-50 transition-all h-12 gap-2 shrink-0"
+                                                        onClick={() => fetchInstalledAssets(task)}
+                                                    >
+                                                        <History className="h-4 w-4" /> View History
+                                                    </Button>
+                                                )}
+
+                                                {(task.status === "IN_PROGRESS" || task.status === "PENDING") && (
                                                     <div className="flex flex-col sm:flex-row gap-3 flex-1">
                                                         {task.status === "PENDING" && (
                                                             <Button
@@ -1180,21 +1234,36 @@ const WorkerDashboard = () => {
                             </form>
 
                             {/* Materials List */}
-                            <div className="max-h-[40vh] overflow-y-auto">
+                            <div className="max-h-[45vh] overflow-y-auto">
                                 <table className="w-full text-left text-sm">
                                     <thead className="sticky top-0 bg-white shadow-sm text-[10px] uppercase font-black text-muted-foreground border-b">
                                         <tr>
                                             <th className="p-4">Material</th>
                                             <th className="p-4">Qty</th>
+                                            <th className="p-4">Serials</th>
                                             <th className="p-4 text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
                                         {ticketMaterials.map((tm: any) => (
-                                            <tr key={tm.id} className="hover:bg-secondary/5">
+                                            <tr key={tm.id} className="hover:bg-secondary/5 align-top">
                                                 <td className="p-4 font-bold text-xs">{tm.product.name}</td>
                                                 <td className="p-4">
                                                     <Badge variant="secondary" className="font-bold">{tm.quantity} {tm.product.unitType}</Badge>
+                                                </td>
+                                                <td className="p-4">
+                                                    {tm.assignedSerials && tm.assignedSerials.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {tm.assignedSerials.map((s: any) => (
+                                                                <Badge key={s.id} variant="outline" className={`font-mono text-[10px] ${s.status === 'ISSUED_TO_WORKER' ? 'border-amber-400 text-amber-700 bg-amber-50' : s.status === 'INSTALLED' ? 'border-green-400 text-green-700 bg-green-50' : 'border-slate-300 text-slate-600'}`}>
+                                                                    {s.serialNumber}
+                                                                    <span className="ml-1 text-[9px] opacity-60">{s.status === 'ISSUED_TO_WORKER' ? '● Active' : s.status}</span>
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground italic">No serials tracked</span>
+                                                    )}
                                                 </td>
                                                 <td className="p-4 text-right">
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveMaterial(tm.id)}>
@@ -1205,13 +1274,164 @@ const WorkerDashboard = () => {
                                         ))}
                                         {ticketMaterials.length === 0 && (
                                             <tr>
-                                                <td colSpan={3} className="p-8 text-center text-muted-foreground italic text-xs">No materials added yet.</td>
+                                                <td colSpan={4} className="p-8 text-center text-muted-foreground italic text-xs">No materials added yet.</td>
                                             </tr>
                                         )}
                                     </tbody>
                                 </table>
                             </div>
+
+                            {/* Return + History action bar */}
+                            {ticketMaterials.some((tm: any) => tm.assignedSerials?.some((s: any) => s.status === 'ISSUED_TO_WORKER')) && (
+                                <div className="p-4 border-t bg-amber-50/50 flex items-center justify-between gap-3">
+                                    <p className="text-xs text-amber-700 font-bold">You have active serial-tracked items. Return unused items before job completion.</p>
+                                    <Button
+                                        variant="outline"
+                                        className="border-2 border-amber-400 text-amber-700 hover:bg-amber-100 font-bold gap-2 shrink-0"
+                                        onClick={() => {
+                                            const allIssuedSerials = ticketMaterials.flatMap((tm: any) =>
+                                                (tm.assignedSerials || []).filter((s: any) => s.status === 'ISSUED_TO_WORKER')
+                                            );
+                                            setReturnSerialIds([]);
+                                            setIsReturnModalOpen(true);
+                                        }}
+                                    >
+                                        <RotateCcw className="h-4 w-4" /> Return Items
+                                    </Button>
+                                </div>
+                            )}
                         </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ── RETURN SERIALS MODAL ─────────────────────────────────────────── */}
+            {isReturnModalOpen && selectedTicket && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                    <Card className="w-full max-w-lg shadow-2xl overflow-hidden">
+                        <CardHeader className="pb-4 bg-amber-50 border-b border-amber-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-xl flex items-center gap-2 text-amber-800">
+                                        <RotateCcw className="h-5 w-5" /> Return Unused Items
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-amber-700">
+                                        Select the serial-tracked items you did NOT install to return to store
+                                    </CardDescription>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => { setIsReturnModalOpen(false); setReturnSerialIds([]); }}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-4 max-h-[55vh] overflow-y-auto space-y-3">
+                            {ticketMaterials.flatMap((tm: any) =>
+                                (tm.assignedSerials || []).filter((s: any) => s.status === 'ISSUED_TO_WORKER').map((s: any) => ({
+                                    ...s,
+                                    productName: tm.product.name
+                                }))
+                            ).length === 0 ? (
+                                <p className="text-center text-sm text-muted-foreground py-8 italic">No active serial-tracked items to return.</p>
+                            ) : (
+                                ticketMaterials.flatMap((tm: any) =>
+                                    (tm.assignedSerials || []).filter((s: any) => s.status === 'ISSUED_TO_WORKER').map((s: any) => ({
+                                        ...s,
+                                        productName: tm.product.name
+                                    }))
+                                ).map((s: any) => (
+                                    <div
+                                        key={s.id}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${returnSerialIds.includes(s.id) ? 'border-amber-400 bg-amber-50' : 'border-slate-200 hover:border-amber-200'}`}
+                                        onClick={() => setReturnSerialIds(prev =>
+                                            prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]
+                                        )}
+                                    >
+                                        <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 ${returnSerialIds.includes(s.id) ? 'bg-amber-500 border-amber-500' : 'border-slate-300'}`}>
+                                            {returnSerialIds.includes(s.id) && <CheckCircle2 className="h-3 w-3 text-white" />}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-slate-700 truncate">{s.productName}</p>
+                                            <p className="text-xs font-mono text-slate-500">{s.serialNumber}</p>
+                                        </div>
+                                        <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-[10px] shrink-0">ACTIVE</Badge>
+                                    </div>
+                                ))
+                            )}
+                        </CardContent>
+                        <div className="p-4 bg-slate-50 border-t flex gap-3">
+                            <Button variant="outline" className="flex-1 font-bold" onClick={() => { setIsReturnModalOpen(false); setReturnSerialIds([]); }}>Cancel</Button>
+                            <Button
+                                className="flex-1 bg-amber-600 hover:bg-amber-700 font-bold gap-2"
+                                disabled={returnSerialIds.length === 0 || isReturning}
+                                onClick={handleReturnSerials}
+                            >
+                                {isReturning ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                                Return {returnSerialIds.length > 0 ? `${returnSerialIds.length} Item(s)` : 'Selected'}
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            {/* ── INSTALLED ASSETS MODAL ─────────────────────────────────────────── */}
+            {isAssetsModalOpen && assetsTicket && (
+                <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm animate-in fade-in duration-300">
+                    <Card className="w-full max-w-2xl shadow-2xl overflow-hidden">
+                        <CardHeader className="pb-4 bg-indigo-50 border-b border-indigo-200">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-xl flex items-center gap-2 text-indigo-800">
+                                        <History className="h-5 w-5" /> Previously Installed Equipment
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-indigo-700">
+                                        {assetsTicket.clientName} — {assetsTicket.clientPhone}
+                                    </CardDescription>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => setIsAssetsModalOpen(false)}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0 max-h-[60vh] overflow-y-auto">
+                            {assetsLoading ? (
+                                <div className="flex items-center justify-center py-16">
+                                    <RefreshCw className="h-6 w-6 animate-spin text-indigo-400" />
+                                </div>
+                            ) : installedAssets.length === 0 ? (
+                                <div className="text-center py-16 text-muted-foreground">
+                                    <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                                    <p className="text-sm italic">No previously installed equipment found for this customer.</p>
+                                </div>
+                            ) : (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-white shadow-sm text-[10px] uppercase font-black text-muted-foreground border-b">
+                                        <tr>
+                                            <th className="p-4">Product</th>
+                                            <th className="p-4">Serial No.</th>
+                                            <th className="p-4">Installed On</th>
+                                            <th className="p-4">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {installedAssets.map((asset: any) => (
+                                            <tr key={asset.id} className="hover:bg-indigo-50/30">
+                                                <td className="p-4 font-bold text-xs">{asset.product?.name || asset.productName || '—'}</td>
+                                                <td className="p-4 font-mono text-xs text-slate-600">{asset.serial?.serialNumber || asset.serialNumber || '—'}</td>
+                                                <td className="p-4 text-xs text-slate-500">{(asset.installationDate || asset.installedAt) ? new Date(asset.installationDate || asset.installedAt).toLocaleDateString('en-IN') : '—'}</td>
+                                                <td className="p-4">
+                                                    <Badge className={`text-[10px] font-bold ${asset.status === 'ACTIVE' ? 'bg-green-100 text-green-700 border-green-300' : asset.status === 'REPLACED' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-slate-100 text-slate-600'}`}>
+                                                        {asset.status}
+                                                    </Badge>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </CardContent>
+                        <div className="p-4 bg-slate-50 border-t">
+                            <Button variant="outline" className="w-full font-bold" onClick={() => setIsAssetsModalOpen(false)}>Close</Button>
+                        </div>
                     </Card>
                 </div>
             )}

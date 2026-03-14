@@ -26,7 +26,7 @@ class InventoryService {
      * Issue material to a worker (OUT transaction)
      */
     async issueMaterial(data) {
-        const { productId, quantity, workerId, ticketId, notes, createdByAdmin = true } = data;
+        const { productId, quantity, workerId, ticketId, notes, createdByAdmin = true, serialIds = [] } = data;
 
         // 1. Check current stock
         const currentStock = await this.getCurrentStock(productId);
@@ -34,27 +34,56 @@ class InventoryService {
             throw new Error(`Insufficient stock. Available: ${currentStock}, Required: ${quantity}`);
         }
 
-        // 2. Create OUT transaction
-        const outTx = await prisma.stockTransaction.create({
-            data: {
-                productId,
-                quantity,
-                transactionType: 'OUT',
-                referenceType: 'WORKER_ISSUE',
-                workerId,
-                ticketId,
-                notes,
-                createdByAdmin
-            },
-            include: {
-                product: true,
-                worker: {
-                    select: { id: true, name: true }
+        // 2. Wrap in transaction to ensure serial consistency
+        return await prisma.$transaction(async (tx) => {
+            if (serialIds && serialIds.length > 0) {
+                if (serialIds.length !== quantity) {
+                    throw new Error("Quantity must match the number of selected serial numbers.");
                 }
+
+                const serials = await tx.productSerial.findMany({ where: { id: { in: serialIds } } });
+                if (serials.length !== quantity || serials.some(s => s.status !== 'IN_STOCK')) {
+                    throw new Error("Invalid or already issued serial numbers selected.");
+                }
+
+                // Update serials and create assignments
+                await tx.productSerial.updateMany({
+                    where: { id: { in: serialIds } },
+                    data: { status: 'ISSUED_TO_WORKER' }
+                });
+
+                const assignments = serialIds.map(sid => ({
+                    ticketId,
+                    productId,
+                    serialId: sid,
+                    workerId
+                }));
+                await tx.ticketSerialAssignment.createMany({ data: assignments });
             }
+
+            // Create OUT transaction
+            const outTx = await tx.stockTransaction.create({
+                data: {
+                    productId,
+                    quantity,
+                    transactionType: 'OUT',
+                    referenceType: 'WORKER_ISSUE',
+                    workerId,
+                    ticketId,
+                    notes,
+                    createdByAdmin
+                },
+                include: {
+                    product: true,
+                    worker: {
+                        select: { id: true, name: true }
+                    }
+                }
+            });
+            await tx.productMaster.update({ where: { id: productId }, data: { currentStock: { decrement: quantity } } });
+            
+            return outTx;
         });
-        await prisma.productMaster.update({ where: { id: productId }, data: { currentStock: { decrement: quantity } } });
-        return outTx;
     }
 
     /**
@@ -251,6 +280,105 @@ class InventoryService {
             });
 
             return { success: true };
+        });
+    }
+
+    /**
+     * Return unused serial materials to store
+     */
+    async returnSerialMaterials(data) {
+        const { ticketId, serialIds, workerId, notes } = data;
+        
+        if (!serialIds || serialIds.length === 0) throw new Error("No serial numbers provided to return.");
+
+        return await prisma.$transaction(async (tx) => {
+            const serials = await tx.productSerial.findMany({ 
+                where: { id: { in: serialIds } },
+                include: { product: true } 
+            });
+            
+            if (serials.length !== serialIds.length || serials.some(s => s.status !== 'ISSUED_TO_WORKER')) {
+                throw new Error("Invalid or not-issued serial numbers selected for return.");
+            }
+
+            // Update serials to IN_STOCK
+            await tx.productSerial.updateMany({
+                where: { id: { in: serialIds } },
+                data: { status: 'IN_STOCK' }
+            });
+            
+            // Mark assignment as returned
+            await tx.ticketSerialAssignment.updateMany({
+                where: { ticketId, serialId: { in: serialIds }, returnedAt: null },
+                data: { returnedAt: new Date() }
+            });
+
+            // Group by product to create stock transactions
+            const productCounts = {};
+            serials.forEach(s => {
+                productCounts[s.productId] = (productCounts[s.productId] || 0) + 1;
+            });
+
+            for (const [productId, quantity] of Object.entries(productCounts)) {
+                await tx.stockTransaction.create({
+                    data: {
+                        productId,
+                        quantity,
+                        transactionType: 'IN',
+                        referenceType: 'RETURN_FROM_TICKET',
+                        workerId,
+                        ticketId,
+                        notes: notes || `Returned unused serials from ticket: ${ticketId}`
+                    }
+                });
+                await tx.productMaster.update({
+                    where: { id: productId },
+                    data: { currentStock: { increment: quantity } }
+                });
+            }
+
+            return { success: true, returnedCount: serialIds.length };
+        });
+    }
+
+    /**
+     * Map assigned serials to CustomerAsset upon ticket completion
+     */
+    async installSerialMaterials(ticketId, customerPhone) {
+        return await prisma.$transaction(async (tx) => {
+            const assignments = await tx.ticketSerialAssignment.findMany({
+                where: { ticketId, returnedAt: null, installedAt: null }
+            });
+
+            if (assignments.length === 0) return { success: true, count: 0 };
+
+            const serialIds = assignments.map(a => a.serialId);
+
+            // Update assignments
+            await tx.ticketSerialAssignment.updateMany({
+                where: { id: { in: assignments.map(a => a.id) } },
+                data: { installedAt: new Date() }
+            });
+
+            // Update serials to INSTALLED
+            await tx.productSerial.updateMany({
+                where: { id: { in: serialIds } },
+                data: { status: 'INSTALLED' }
+            });
+
+            // Create Customer assets
+            const assets = assignments.map(a => ({
+                customerPhone,
+                productId: a.productId,
+                serialId: a.serialId,
+                ticketId,
+                installationDate: new Date(),
+                status: 'ACTIVE'
+            }));
+
+            await tx.customerAsset.createMany({ data: assets });
+
+            return { success: true, count: assets.length };
         });
     }
 
