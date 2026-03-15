@@ -1,5 +1,4 @@
 version: "3.9"
-
 services:
   postgres:
     image: postgres:15
@@ -7,13 +6,12 @@ services:
     restart: always
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: HiTechSecure2026
       POSTGRES_DB: hitech
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
-
+      - "127.0.0.1:5432:5432"
   backend:
     build: ./backend
     container_name: hitech_backend
@@ -21,10 +19,11 @@ services:
     depends_on:
       - postgres
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hitech
+      DATABASE_URL: postgresql://postgres:HiTechSecure2026@postgres:5432/hitech
+      JWT_SECRET: HiTech_JWT_Super_Secret_2026
+      PORT: 5000
     ports:
-      - "5000:5000"
-
+      - "127.0.0.1:5000:5000"
   frontend:
     build: ./frontend
     container_name: hitech_frontend
@@ -34,9 +33,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-
     volumes:
       - /etc/letsencrypt:/etc/letsencrypt:ro
-
 volumes:
   pgdata:
