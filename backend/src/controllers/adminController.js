@@ -389,7 +389,11 @@ exports.getCustomerStatement = async (req, res) => {
             include: {
                 assignments: {
                     include: { worker: { select: { name: true } } }
-                }
+                },
+                ticketMaterials: {
+                    include: { product: { select: { name: true, unitType: true } } }
+                },
+                installationWorker: { select: { name: true } }
             }
         });
 
@@ -416,7 +420,7 @@ exports.getCustomerStatement = async (req, res) => {
 
         worksheet.addRow(['Customer:', tickets[0].clientName]);
         worksheet.addRow(['Phone:', tickets[0].clientPhone]);
-        worksheet.addRow(['Generated On:', new Date().toLocaleString()]);
+        worksheet.addRow(['Generated On:', new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })]);
         worksheet.addRow([]);
 
         // Summary Box
@@ -425,13 +429,13 @@ exports.getCustomerStatement = async (req, res) => {
         worksheet.addRow(['Total Billed', `₹${totalRevenue}`]);
         worksheet.addRow(['Total Paid', `₹${totalReceived}`]);
         worksheet.addRow(['Pending Amount', `₹${pendingAmount}`]);
-        worksheet.addRow(['First Visit', new Date(firstVisit).toLocaleDateString('en-IN')]);
-        worksheet.addRow(['Last Visit', new Date(lastVisit).toLocaleDateString('en-IN')]);
+        worksheet.addRow(['First Visit', new Date(firstVisit).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })]);
+        worksheet.addRow(['Last Visit', new Date(lastVisit).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })]);
         worksheet.addRow([]);
 
         // Table Headers
         const headerRow = worksheet.addRow([
-            'Ticket ID', 'Service Type', 'Date', 'Status', 'Technicians', 'Amount (₹)', 'Payment Status', 'Warranty Expiry', 'AMC Expiry'
+            'Ticket ID', 'Service Type', 'Date', 'Status', 'Technicians', 'Amount (₹)', 'Payment Status', 'Warranty Expiry'
         ]);
         headerRow.eachCell((cell) => {
             cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -441,25 +445,39 @@ exports.getCustomerStatement = async (req, res) => {
 
         // Add Data
         tickets.forEach(t => {
-            const techs = t.assignments.map(a => a.worker.name).join(', ') || 'Unassigned';
+            const assignedWorkers = t.assignments?.map(a => a.worker?.name).filter(Boolean) || [];
+            const installWorker = t.installationWorker?.name;
+            if (installWorker && !assignedWorkers.includes(installWorker)) assignedWorkers.push(installWorker);
+            const techs = assignedWorkers.length > 0 ? assignedWorkers.join(', ') : 'Unassigned';
             worksheet.addRow([
                 t.id.slice(0, 8).toUpperCase(),
                 t.type,
-                new Date(t.createdAt).toLocaleDateString('en-IN'),
+                new Date(t.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
                 t.status,
                 techs,
                 t.totalAmount || 0,
                 t.paymentStatus || 'PENDING',
                 t.warrantyExpiryDate ? new Date(t.warrantyExpiryDate).toLocaleDateString('en-IN') : 'N/A',
-                t.amcRenewalDate ? new Date(t.amcRenewalDate).toLocaleDateString('en-IN') : 'N/A'
+                t.warrantyExpiryDate ? new Date(t.warrantyExpiryDate).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'N/A'
             ]);
+            if (t.ticketMaterials && t.ticketMaterials.length > 0) {
+                const matStr = t.ticketMaterials.map(m => `${m.product.name} x${m.quantity} ${m.product.unitType}`).join(' | ');
+                const matRow = worksheet.addRow(['', '📦 Materials Used', matStr]);
+                matRow.getCell(1).value = '';
+                matRow.getCell(2).value = '📦 Materials Used';
+                matRow.getCell(2).font = { bold: true, color: { argb: 'FF1D4ED8' } };
+                matRow.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F0FE' } };
+                matRow.getCell(3).value = matStr;
+                matRow.getCell(3).font = { color: { argb: 'FF1D4ED8' } };
+                matRow.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F0FE' } };
+            }
         });
 
         // Formatting
         worksheet.columns.forEach(col => { col.width = 15; });
         worksheet.getColumn(1).width = 12; // Ticket ID
         worksheet.getColumn(5).width = 25; // Technicians
-        worksheet.getColumn(9).width = 15; // AMC
+        
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename=HTC_Statement_${phone}.xlsx`);
