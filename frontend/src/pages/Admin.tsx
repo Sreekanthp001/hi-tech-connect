@@ -252,7 +252,6 @@ const AdminDashboard = () => {
     const [inventoryHistory, setInventoryHistory] = useState<any[]>([]);
     const [inventoryLoading, setInventoryLoading] = useState(false);
     const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
-    const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
     const [isAdjustStockModalOpen, setIsAdjustStockModalOpen] = useState(false);
     const [isManageSerialsModalOpen, setIsManageSerialsModalOpen] = useState(false);
     const [selectedSerialProduct, setSelectedSerialProduct] = useState<any>(null);

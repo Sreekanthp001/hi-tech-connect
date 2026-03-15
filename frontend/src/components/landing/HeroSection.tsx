@@ -1,110 +1,155 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+
+const CAMERA_FEEDS = [
+  { id: "CAM-01", label: "IP CCTV", location: "Outdoor Surveillance", img: "https://images.unsplash.com/photo-1557597774-9d2739f85a76?q=80&w=600&auto=format&fit=crop", status: "LIVE" },
+  { id: "CAM-02", label: "Biometric", location: "Access Control", img: "https://images.unsplash.com/photo-1614064641938-3bbee52942c7?q=80&w=600&auto=format&fit=crop", status: "LIVE" },
+  { id: "CAM-03", label: "NVR/DVR", location: "Recording System", img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?q=80&w=600&auto=format&fit=crop", status: "LIVE" },
+  { id: "CAM-04", label: "Network Infra", location: "CAT6/Fiber", img: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=600&auto=format&fit=crop", status: "REC" },
+];
 
 const HeroSection = () => {
+  const [time, setTime] = useState(new Date());
+  const [activeCamera, setActiveCamera] = useState(0);
+
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    const t = setInterval(() => setActiveCamera(p => (p + 1) % CAMERA_FEEDS.length), 3000);
+    return () => clearInterval(t);
+  }, []);
+
   const scrollToSection = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
       const headerOffset = 80;
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth"
-      });
+      const offsetPosition = element.getBoundingClientRect().top + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: offsetPosition, behavior: "smooth" });
     }
   };
 
+  const formatTime = (d: Date) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  const formatDate = (d: Date) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }).toUpperCase();
+
   return (
     <>
-      <section
-        id="hero"
-        className="relative min-h-[85vh] flex flex-col items-center justify-center overflow-hidden"
-        aria-labelledby="hero-heading"
-      >
-        {/* Background Layer - Relevant Service Image */}
-        <div className="absolute inset-0 z-0 bg-slate-950">
-          <img
-            src="https://images.unsplash.com/photo-1557597774-9d2739f85a76?q=80&w=2070&auto=format&fit=crop"
-            alt="Hi Tech technician installing high-end security camera"
-            className="h-full w-full object-cover opacity-50 grayscale-[0.2]"
-          />
-          <div
-            className="absolute inset-0 z-10"
-            style={{
-              background: `linear-gradient(to bottom, 
-                rgba(15, 23, 42, 0.3) 0%, 
-                rgba(15, 23, 42, 0.7) 50%, 
-                rgba(15, 23, 42, 1) 100%)`
-            }}
-          />
-          <div
-            className="absolute inset-0 z-20 pointer-events-none"
-            style={{
-              background: 'radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.8) 100%)'
-            }}
-          />
+      <section id="hero" className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden bg-gray-50 pt-20 pb-10">
+
+        {/* Top status bar */}
+        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8 mb-4">
+          <div className="flex items-center justify-between bg-blue-900 px-4 py-2 rounded-md">
+            <div className="flex items-center gap-3">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block" />
+              <span className="text-green-300 text-xs tracking-widest font-bold" style={{fontFamily:"monospace"}}>SECURITY MONITORING ACTIVE</span>
+            </div>
+            <div className="text-blue-200 text-xs tracking-wider" style={{fontFamily:"monospace"}}>
+              {formatDate(time)} &nbsp;|&nbsp; {formatTime(time)}
+            </div>
+          </div>
         </div>
 
-        {/* Content Container */}
-        <div className="relative z-30 w-full max-w-7xl mx-auto px-6 lg:px-8 pt-20 pb-20 flex flex-col items-center text-center space-y-6">
+        <div className="w-full max-w-7xl mx-auto px-4 lg:px-8">
+          {/* Camera Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-6">
+            {CAMERA_FEEDS.map((cam, idx) => (
+              <div
+                key={cam.id}
+                onClick={() => setActiveCamera(idx)}
+                className="relative cursor-pointer overflow-hidden rounded-lg border-2 transition-all duration-300 shadow-md hover:shadow-xl"
+                style={{
+                  aspectRatio: "16/10",
+                  borderColor: activeCamera === idx ? "#1d4ed8" : "#cbd5e1",
+                  boxShadow: activeCamera === idx ? "0 0 0 3px rgba(29,78,216,0.3)" : undefined,
+                }}
+              >
+                <img src={cam.img} alt={cam.label} className="w-full h-full object-cover" style={{ filter: "brightness(0.85)" }} />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
 
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <span className="text-xs font-black uppercase tracking-[0.4em] text-blue-400">
-              Nellore's Most Trusted — 4.9 Rating
-            </span>
+                {/* Camera ID */}
+                <div className="absolute top-2 left-2 bg-black/60 px-2 py-0.5 rounded text-white text-[10px] font-bold" style={{fontFamily:"monospace"}}>{cam.id}</div>
+
+                {/* Status */}
+                <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 px-2 py-0.5 rounded">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block" />
+                  <span className="text-red-400 text-[9px] font-bold" style={{fontFamily:"monospace"}}>{cam.status}</span>
+                </div>
+
+                {/* Bottom label */}
+                <div className="absolute bottom-0 left-0 right-0 px-3 py-2">
+                  <div className="text-white text-xs font-bold">{cam.label}</div>
+                  <div className="text-gray-300 text-[10px]">{cam.location}</div>
+                </div>
+              </div>
+            ))}
           </div>
 
-          <h1
-            id="hero-heading"
-            className="text-3xl sm:text-5xl lg:text-6xl font-black leading-tight tracking-tight text-white animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100"
-          >
-            Hi Tech <br className="hidden sm:block" />
-            <span className="text-blue-500">Communication Systems</span>
-          </h1>
+          {/* Main content */}
+          <div className="grid lg:grid-cols-2 gap-8 items-center">
+            <div className="space-y-5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-0.5 bg-blue-600" />
+                <span className="text-blue-600 text-xs tracking-[0.3em] uppercase font-bold">Est. 1997 · Nellore · Authorized Dealer</span>
+              </div>
 
-          <p className="max-w-2xl text-base sm:text-lg text-gray-300 leading-relaxed font-medium animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-            28 Years in Business serving Nellore Bazar. Authorized dealers in
-            IP CCTV, Biometric Attendance, and advanced security infrastructure.
-          </p>
+              <h1 className="text-4xl lg:text-5xl font-black leading-tight text-gray-900 tracking-tight">
+                Hi Tech <span className="text-blue-700">Communication</span> Systems
+              </h1>
 
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center w-full sm:w-auto animate-in fade-in slide-in-from-bottom-10 duration-700 delay-300">
-            <button
-              onClick={() => scrollToSection("request")}
-              className="w-full sm:w-min min-w-[220px] min-h-[56px] bg-blue-600 text-white px-8 py-4 rounded-md font-bold text-base shadow-2xl shadow-blue-500/20 hover:bg-blue-700 transition-all transform hover:-translate-y-1"
-            >
-              New Service / Repair
-            </button>
+              <p className="text-base text-gray-600 leading-relaxed max-w-md">
+                28 Years serving Nellore Bazar. Authorized dealers in IP CCTV, Biometric Attendance, DVR/NVR systems and advanced security infrastructure.
+              </p>
 
-            <button
-              onClick={() => scrollToSection("our-work")}
-              className="w-full sm:w-min min-w-[220px] min-h-[56px] border border-white/20 text-gray-300 bg-transparent px-8 py-4 rounded-md font-bold text-base hover:bg-white/5 transition-all"
-            >
-              Our Work
-            </button>
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button onClick={() => scrollToSection("request")} className="px-8 py-3 bg-blue-700 hover:bg-blue-800 text-white font-bold text-sm rounded-md shadow-lg transition-all hover:-translate-y-0.5">
+                  New Service / Repair
+                </button>
+                <button onClick={() => scrollToSection("our-work")} className="px-8 py-3 border-2 border-blue-700 text-blue-700 font-bold text-sm rounded-md hover:bg-blue-50 transition-all">
+                  Our Work
+                </button>
+              </div>
+            </div>
+
+            {/* Stats panel */}
+            <div className="bg-blue-900 rounded-xl p-6 space-y-4 shadow-xl">
+              <div className="text-blue-300 text-[10px] tracking-widest uppercase border-b border-blue-700 pb-2" style={{fontFamily:"monospace"}}>
+                ■ SYSTEM STATUS
+              </div>
+              {[
+                { label: "YEARS IN BUSINESS", value: "28 YRS", color: "#86efac" },
+                { label: "CUSTOMER RATING", value: "4.9 ★", color: "#86efac" },
+                { label: "REVIEWS ON JUSTDIAL", value: "915+", color: "#93c5fd" },
+                { label: "AUTHORIZED DEALER", value: "VERIFIED", color: "#86efac" },
+                { label: "SERVICE STATUS", value: "ONLINE", color: "#86efac" },
+              ].map(s => (
+                <div key={s.label} className="flex items-center justify-between">
+                  <span className="text-blue-300 text-[10px] tracking-widest" style={{fontFamily:"monospace"}}>{s.label}</span>
+                  <span className="font-black text-sm" style={{ color: s.color, fontFamily:"monospace" }}>{s.value}</span>
+                </div>
+              ))}
+              <div className="pt-2 border-t border-blue-700 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-green-300 text-[10px] tracking-widest" style={{fontFamily:"monospace"}}>ALL SYSTEMS OPERATIONAL</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Authority Metrics Section */}
-      <section className="bg-slate-950 py-16 border-y border-white/5 relative z-40">
+      {/* Metrics bar */}
+      <section className="py-10 bg-white border-y border-gray-200">
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-3 gap-4">
             {[
-              { label: "Since 1997 in Nellore", value: "28 Years", sub: "MARKET LEADERSHIP" },
-              { label: "Rating on Justdial", value: "4.9 Stars", sub: "915+ REVIEWS" },
-              { label: "Authorized Dealer", value: "Verified", sub: "TRUSTED SERVICE" },
-            ].map((metric) => (
-              <div
-                key={metric.label}
-                className="text-center group border-r last:border-0 border-white/5"
-              >
-                <div className="text-4xl font-black text-white mb-1 tracking-tighter group-hover:text-blue-500 transition-colors">
-                  {metric.value}
-                </div>
-                <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                  {metric.label}
-                </div>
+              { value: "28 Years", label: "MARKET LEADERSHIP", sub: "Since 1997 in Nellore" },
+              { value: "4.9 Stars", label: "915+ REVIEWS", sub: "Rating on Justdial" },
+              { value: "Verified", label: "TRUSTED SERVICE", sub: "Authorized Dealer" },
+            ].map(m => (
+              <div key={m.label} className="text-center border-r last:border-0 border-gray-200">
+                <div className="text-3xl font-black text-blue-800 mb-1">{m.value}</div>
+                <div className="text-[10px] font-bold tracking-widest text-blue-600">{m.label}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{m.sub}</div>
               </div>
             ))}
           </div>
