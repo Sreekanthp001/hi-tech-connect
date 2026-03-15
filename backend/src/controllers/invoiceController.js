@@ -1,5 +1,5 @@
 const prisma = require('../config/prisma');
-const { generateInvoicePDF } = require('../services/pdfService');
+const PDFDocument = require('pdfkit');
 
 /**
  * Get all invoices (Admin)

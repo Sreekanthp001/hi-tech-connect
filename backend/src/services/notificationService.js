@@ -12,6 +12,7 @@ exports.onTicketCreated = async (ticket) => {
         const admins = await prisma.user.findMany({ where: { role: 'ADMIN' } });
         const notifications = admins.map(admin => ({
             userId: admin.id,
+            type: "INFO",
             title: "New Service Request",
             message: `New ${ticket.type} from ${ticket.clientName}`
         }));
@@ -32,6 +33,7 @@ exports.onWorkerAssigned = async (data) => {
         await prisma.notification.create({
             data: {
                 userId: data.workerId,
+                type: "INFO",
                 title: "New Assignment",
                 message: `You have been assigned a ${data.type} at ${data.address}`
             }
@@ -52,6 +54,7 @@ exports.onTicketCompleted = async (ticket) => {
 
         const notifications = admins.map(admin => ({
             userId: admin.id,
+            type: "SUCCESS",
             title: "Work Completed",
             message: `Ticket completed by ${workerName}`
         }));
@@ -75,6 +78,7 @@ exports.onTicketPending = async (ticket, note) => {
 
         const notifications = admins.map(admin => ({
             userId: admin.id,
+            type: "WARNING",
             title: "Work Marked Pending",
             message: `${workerName} marked ticket pending: ${note || "No reason provided"}`
         }));
