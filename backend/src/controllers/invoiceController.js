@@ -49,12 +49,13 @@ exports.downloadInvoice = async (req, res) => {
         if (!invoice) {
             return res.status(404).json({ error: 'Invoice not found' });
         }
-
-        const pdfBuffer = await generateInvoicePDF({ invoice, ticket: invoice.ticket });
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=Invoice-${invoice.invoiceNumber}.pdf`);
-        res.send(pdfBuffer);
+        const doc = new PDFDocument({ margin: 40 });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename=Invoice-${invoice.invoiceNumber}.pdf`);
+        doc.pipe(res);
+        doc.fontSize(18).text("HI-TECH CONNECT", { align: "center" });
+        doc.fontSize(10).text(`Invoice: ${invoice.invoiceNumber} | Customer: ${invoice.ticket?.clientName || "N/A"} | Amount: Rs.${invoice.totalAmount || 0}`);
+        doc.end();
     } catch (error) {
         console.error('Download invoice error:', error);
         res.status(500).json({ error: 'Internal server error' });
