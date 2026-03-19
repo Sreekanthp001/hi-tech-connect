@@ -131,7 +131,13 @@ const LocationPicker = ({ onLocationSelect, initialAddress }: LocationPickerProp
             },
             (err) => {
                 console.error("Geolocation error:", err);
-                toast.error(`Location access denied or failed: ${err.message}`);
+                if (err.code === 1) {
+                    toast.error("Location permission denied. Please allow location access in your browser settings, or search your address manually.");
+                } else if (err.code === 2) {
+                    toast.error("Location unavailable. Please search your address manually.");
+                } else {
+                    toast.error("Location timeout. Please search your address manually.");
+                }
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
