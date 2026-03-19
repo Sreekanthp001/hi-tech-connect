@@ -770,14 +770,14 @@ const AdminDashboard = () => {
     };
 
     const updateQuoteItem = (index: number, field: string, value: any) => {
-        if (!selectedTicket || !selectedTicket.items) return;
-        const items = [...selectedTicket.items];
+        if (!quotationData || !quotationData.items) return;
+        const items = [...quotationData.items];
         if (field === "quantity") {
             items[index].quantity = parseInt(value) || 0;
-        } else if (field === "price") {
-            items[index].price = parseFloat(value) || 0;
+        } else if (field === "unitPrice" || field === "price") {
+            items[index].unitPrice = parseFloat(value) || 0;
         }
-        setSelectedTicket({ ...selectedTicket, items });
+        setQuotationData({ ...quotationData, items });
     };
 
     const removeQuotationItem = (index: number) => {

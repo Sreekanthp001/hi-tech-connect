@@ -497,7 +497,7 @@ const WorkerDashboard = () => {
                                                     </div>
                                                 )}
 
-                                                {task.status === "SURVEY_ASSIGNED" || task.status === "SITE_VISIT_ASSIGNED" && (
+                                                {(task.status === "SURVEY_ASSIGNED" || task.status === "SITE_VISIT_ASSIGNED") && (
                                                     <div className="mt-4 flex gap-3">
                                                         <Button
                                                             className="flex-1 bg-purple-600 hover:bg-purple-700 font-black uppercase tracking-widest gap-2 shadow-lg"
@@ -673,7 +673,7 @@ const WorkerDashboard = () => {
                                                     </Button>
                                                 )}
 
-                                                {task.status === "SURVEY_ASSIGNED" || task.status === "SITE_VISIT_ASSIGNED" && (
+                                                {(task.status === "SURVEY_ASSIGNED" || task.status === "SITE_VISIT_ASSIGNED") && (
                                                     <div className="flex flex-col gap-3">
                                                         <Button
                                                             className="flex-1 bg-purple-600 hover:bg-purple-700 font-bold h-12 shadow-lg"
@@ -696,7 +696,7 @@ const WorkerDashboard = () => {
                                                     </div>
                                                 )}
 
-                                                {(task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED") && (
+                                                {(task.status === "INSTALLATION_ASSIGNED" || task.status === "WORK_ASSIGNED" || task.status === "IN_PROGRESS") && (
                                                     <>
                                                         <Button
                                                             variant="outline"
