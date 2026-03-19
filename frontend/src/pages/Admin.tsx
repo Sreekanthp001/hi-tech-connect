@@ -1066,7 +1066,7 @@ const AdminDashboard = () => {
     const fetchInventoryItems = async () => {
         setInventoryLoading(true);
         try {
-            const res = await apiFetch("/products");
+            const res = await apiFetch("/inventory/products/list");
             setInventoryItems(res.data);
         } catch (e) {
             toast.error("Failed to fetch inventory items");

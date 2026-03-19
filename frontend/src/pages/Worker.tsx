@@ -100,6 +100,7 @@ const WorkerDashboard = () => {
     const [tickets, setTickets] = useState<TicketRecord[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [updating, setUpdating] = useState<string | null>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
 
     // Pending Modal State
     const [pendingModalTicket, setPendingModalTicket] = useState<TicketRecord | null>(null);
@@ -297,6 +298,7 @@ const WorkerDashboard = () => {
         });
     };
     const handlePhotoUpload = async (ticketId: string, type: string, file: File) => {
+        setUploadingPhoto(ticketId + type);
         setUpdating(ticketId);
         try {
             const compressed = await compressImage(file);
@@ -310,6 +312,7 @@ const WorkerDashboard = () => {
             });
 
             toast.success(`${type} photo uploaded!`);
+            setUploadingPhoto(null);
 
             // Update local state with the new photo
             setTickets(prev => prev.map(t => {
@@ -541,7 +544,6 @@ const WorkerDashboard = () => {
                                                                 type="file"
                                                                 id={`before-${task.id}`}
                                                                 accept="image/*"
-                                                                capture="environment"
                                                                 className="hidden"
                                                                 onChange={(e) => {
                                                                     const file = e.target.files?.[0];
@@ -556,7 +558,7 @@ const WorkerDashboard = () => {
                                                                 onClick={() => document.getElementById(`before-${task.id}`)?.click()}
                                                                 disabled={updating === task.id}
                                                             >
-                                                                <Camera className="h-4 w-4 mr-2" /> Before
+                                                                {uploadingPhoto === task.id + "BEFORE" ? "Uploading..." : <><Camera className="h-4 w-4 mr-2" /> Before</>}
                                                             </Button>
                                                             {task.ticketPhotos?.some(p => p.type === 'BEFORE') && (
                                                                 <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white border border-white shadow-sm scale-110">
@@ -584,7 +586,7 @@ const WorkerDashboard = () => {
                                                                 onClick={() => document.getElementById(`after-${task.id}`)?.click()}
                                                                 disabled={updating === task.id}
                                                             >
-                                                                <Camera className="h-4 w-4 mr-2" /> After
+                                                                {uploadingPhoto === task.id + "AFTER" ? "Uploading..." : <><Camera className="h-4 w-4 mr-2" /> After</>}
                                                             </Button>
                                                             {task.ticketPhotos?.some(p => p.type === 'AFTER') && (
                                                                 <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white border border-white shadow-sm scale-110">
@@ -1133,7 +1135,22 @@ const WorkerDashboard = () => {
                                             <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest w-24 text-center">Req. Qty</Label>
                                         </div>
                                         <div className="space-y-1">
-                                            {MASTER_ITEMS.map((item) => (
+                                            {inventoryItems.length > 0 ? inventoryItems.map((item) => (
+                                                <div key={item.id} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 px-2 rounded-lg transition-colors group">
+                                                    <div>
+                                                        <span className="text-sm font-bold text-slate-700">{item.name}</span>
+                                                        <span className="text-[10px] text-muted-foreground ml-2">({item.currentStock} {item.unitType} available)</span>
+                                                    </div>
+                                                    <Input
+                                                        type="number"
+                                                        min="0"
+                                                        placeholder="0"
+                                                        className="w-24 h-9 text-center font-black text-purple-600 border-2 focus:border-purple-500"
+                                                        value={surveyQuantities[item.name] || ""}
+                                                        onChange={(e) => updateSurveyQuantity(item.name, parseInt(e.target.value) || 0)}
+                                                    />
+                                                </div>
+                                            )) : MASTER_ITEMS.map((item) => (
                                                 <div key={item} className="flex justify-between items-center py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50 px-2 rounded-lg transition-colors group">
                                                     <span className="text-sm font-bold text-slate-700">{item}</span>
                                                     <Input
