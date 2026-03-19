@@ -415,6 +415,12 @@ const AdminDashboard = () => {
     const [customers, setCustomers] = useState<any[]>([]);
     const [customersLoading, setCustomersLoading] = useState(false);
     const [customerSearch, setCustomerSearch] = useState("");
+    const [pendingFilter, setPendingFilter] = useState(false);
+    const filteredCustomers = customers.filter(c => {
+        const matchSearch = c.name?.toLowerCase().includes(customerSearch.toLowerCase()) || c.phone?.includes(customerSearch);
+        const matchPending = pendingFilter ? (c.balance > 0) : true;
+        return matchSearch && matchPending;
+    });
     const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
     const [customerProfileLoading, setCustomerProfileLoading] = useState(false);
 
@@ -2001,9 +2007,9 @@ const AdminDashboard = () => {
                                     { label: "Today's Collection", value: revStats.todayCollection, icon: CreditCard, color: "text-green-600", prefix: "₹" },
                                     { label: "Monthly Revenue", value: revStats.monthCollection, icon: TrendingUp, color: "text-blue-600", prefix: "₹" },
                                     { label: "Total Revenue", value: revStats.totalRevenue, icon: Building, color: "text-primary", prefix: "₹" },
-                                    { label: "Pending Payments", value: revStats.pendingCollection, icon: AlertCircle, color: "text-warning", prefix: "₹" },
+                                    { label: "Pending Payments", value: revStats.pendingCollection, icon: AlertCircle, color: "text-warning", prefix: "₹", clickable: true },
                                 ].map((stat) => (
-                                    <Card key={stat.label} className="premium-card overflow-hidden group border-l-4 border-l-primary/20">
+                                    <Card key={stat.label} className={`premium-card overflow-hidden group border-l-4 border-l-primary/20 ${"clickable" in stat && stat.clickable ? "cursor-pointer hover:shadow-lg transition-all" : ""}`} onClick={"clickable" in stat && stat.clickable ? () => { setActiveTab("customers"); setPendingFilter(true); } : undefined}>
                                         <CardContent className="flex items-center gap-4 p-6">
                                             <div className={`rounded-full bg-secondary p-3 ${stat.color}`}>
                                                 <stat.icon className="h-5 w-5" />
@@ -2390,7 +2396,7 @@ const AdminDashboard = () => {
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y">
-                                                        {customers.map((c) => (
+                                                        {filteredCustomers.map((c) => (
                                                             <tr key={c.id} className="transition-colors hover:bg-secondary/30 group">
                                                                 <td className="py-4 pr-4">
                                                                     <div className="flex items-center gap-3">

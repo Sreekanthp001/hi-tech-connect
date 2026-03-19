@@ -285,14 +285,14 @@ const WorkerDashboard = () => {
             const canvas = document.createElement('canvas');
             const img = new Image();
             img.onload = () => {
-                const maxW = 1024;
+                const maxW = 800;
                 let w = img.width, h = img.height;
                 if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
                 canvas.width = w; canvas.height = h;
                 canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
                 canvas.toBlob(blob => {
                     resolve(blob ? new File([blob], file.name, { type: 'image/jpeg' }) : file);
-                }, 'image/jpeg', 0.7);
+                }, 'image/jpeg', 0.5);
             };
             img.src = URL.createObjectURL(file);
         });
