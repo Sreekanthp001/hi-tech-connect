@@ -18,3 +18,4 @@ router.patch('/tickets/:ticketId/items', ticketController.submitTicketItems);
 router.post('/change-password', authController.changePassword);
 
 module.exports = router;
+router.delete('/photos/:photoId', requireRole('ADMIN'), ticketController.deleteTicketPhoto);

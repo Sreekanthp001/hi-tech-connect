@@ -1075,3 +1075,33 @@ exports.handleCustomerAction = async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 };
+
+exports.deleteTicketPhoto = async (req, res) => {
+    try {
+        const { photoId } = req.params;
+        const photo = await prisma.ticketPhoto.findUnique({ where: { id: photoId } });
+        if (!photo) return res.status(404).json({ error: "Photo not found" });
+        
+        // Delete file from disk
+        const fs = require('fs');
+        const path = require('path');
+        const filePath = path.join(__dirname, '..', '..', photo.imageUrl);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        
+        // Delete from DB
+        await prisma.ticketPhoto.delete({ where: { id: photoId } });
+        
+        // Update ticket beforeImages/afterImages arrays
+        const ticket = await prisma.ticket.findUnique({ where: { id: photo.ticketId }, select: { beforeImages: true, afterImages: true } });
+        if (ticket) {
+            const beforeImages = (ticket.beforeImages || []).filter((url: string) => url !== photo.imageUrl);
+            const afterImages = (ticket.afterImages || []).filter((url: string) => url !== photo.imageUrl);
+            await prisma.ticket.update({ where: { id: photo.ticketId }, data: { beforeImages, afterImages } });
+        }
+        
+        res.json({ success: true });
+    } catch (err: any) {
+        console.error("Delete photo error:", err);
+        res.status(500).json({ error: err.message });
+    }
+};
