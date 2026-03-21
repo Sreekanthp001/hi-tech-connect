@@ -1094,13 +1094,13 @@ exports.deleteTicketPhoto = async (req, res) => {
         // Update ticket beforeImages/afterImages arrays
         const ticket = await prisma.ticket.findUnique({ where: { id: photo.ticketId }, select: { beforeImages: true, afterImages: true } });
         if (ticket) {
-            const beforeImages = (ticket.beforeImages || []).filter((url: string) => url !== photo.imageUrl);
-            const afterImages = (ticket.afterImages || []).filter((url: string) => url !== photo.imageUrl);
+            const beforeImages = (ticket.beforeImages || []).filter((url) => url !== photo.imageUrl);
+            const afterImages = (ticket.afterImages || []).filter((url) => url !== photo.imageUrl);
             await prisma.ticket.update({ where: { id: photo.ticketId }, data: { beforeImages, afterImages } });
         }
         
         res.json({ success: true });
-    } catch (err: any) {
+    } catch (err) {
         console.error("Delete photo error:", err);
         res.status(500).json({ error: err.message });
     }
