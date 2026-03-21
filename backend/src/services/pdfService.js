@@ -8,7 +8,7 @@ class PdfService {
         doc.pipe(res);
 
         // Header - Branding
-        doc.fillColor('#1e293b').fontSize(24).font('Helvetica-Bold').text('Hi-Tech Connect', { align: 'left' });
+        doc.fillColor('#1e293b').fontSize(24).font('Helvetica-Bold').text('Hi-Tech Communications', { align: 'left' });
         doc.fillColor('#64748b').fontSize(9).font('Helvetica').text('Smart Security Solutions & Advanced CCTV Surveillance', { align: 'left' });
         doc.text('GSTIN: 37AAAAA0000A1Z5 | Contact: +91 09885680280', { align: 'left' });
         doc.text('Address: First floor, Kac plaza, Rallapalli Ramasubbaiah St, Ramji Nagar, Nellore, Andhra Pradesh 524001', { align: 'left' });
@@ -100,7 +100,7 @@ class PdfService {
         // Footer Branding
         const footerY = 740;
         doc.moveTo(50, footerY - 10).lineTo(550, footerY - 10).strokeColor('#000').lineWidth(0.5).stroke();
-        doc.fontSize(8).fillColor('#64748b').text('Thank you for choosing Hi-Tech Connect. We secure what matters most to you.', 50, footerY, { align: 'center' });
+        doc.fontSize(8).fillColor('#64748b').text('Thank you for choosing Hi-Tech Communications. We secure what matters most to you.', 50, footerY, { align: 'center' });
 
         doc.end();
     }
