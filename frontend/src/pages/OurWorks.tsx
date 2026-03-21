@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Camera, MapPin, Calendar, User2, ArrowRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import api from "@/lib/api";
+import apiFetch from "@/lib/api";
 
 interface PortfolioPhoto {
     id: string;
@@ -71,7 +71,7 @@ const OurWorksPage = () => {
     useEffect(() => {
         const fetchPortfolio = async () => {
             try {
-                const res = await api.get("/portfolio/public");
+                const res = await apiFetch("/portfolio/public");
                 setJobs(res.data);
             } catch (err) {
                 console.error("Failed to fetch portfolio");
